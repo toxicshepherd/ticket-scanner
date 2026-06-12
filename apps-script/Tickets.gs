@@ -34,7 +34,18 @@ function buildTicketTemplate() {
   // PPTX laden und von Drive nach Google Slides konvertieren lassen —
   // nur so bleibt die exakte Kartengröße erhalten (die Slides API
   // ignoriert pageSize beim Anlegen)
-  const blob = UrlFetchApp.fetch(TICKET_TEMPLATE_URL).getBlob();
+  const resp = UrlFetchApp.fetch(TICKET_TEMPLATE_URL,
+    { muteHttpExceptions: true });
+  if (resp.getResponseCode() !== 200) {
+    throw new Error('Vorlage konnte nicht von GitHub geladen werden ' +
+      '(HTTP ' + resp.getResponseCode() + '). Ist das Repo erreichbar?');
+  }
+  // Ohne expliziten Dateityp lehnt die Drive-Konvertierung den Upload
+  // als "Bad Request" ab (der Download kommt als octet-stream an)
+  const blob = resp.getBlob()
+    .setName('Eintrittskarten-Vorlage.pptx')
+    .setContentType(
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation');
   const file = Drive.Files.create(
     { name: 'Eintrittskarten-Vorlage',
       mimeType: 'application/vnd.google-apps.presentation' },
