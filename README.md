@@ -79,7 +79,9 @@ Nach jedem Scan geht es automatisch nach 3 Sekunden weiter; der
 
 1. **Apps Script:** Inhalte aus `apps-script/` in den an das Sheet gebundenen
    Script-Editor kopieren (`Code.gs`, plus HTML-Dateien `Upload` und `Scanner`).
-   Der erweiterte Dienst **Drive API** muss aktiviert sein (für den XLSX-Import).
+   Die erweiterten Dienste **Drive API** (XLSX-Import) und **Slides API**
+   (schnelle Karten-Generierung per batchUpdate) müssen aktiviert sein
+   (Dienste → „+" → hinzufügen).
 2. **Web-App bereitstellen:** Bereitstellen → Neue Bereitstellung → Web-App,
    Zugriff „Jeder". Die `/exec`-URL kopieren. Nach Code-Änderungen die
    Bereitstellung aktualisieren, sonst läuft die alte Version weiter.

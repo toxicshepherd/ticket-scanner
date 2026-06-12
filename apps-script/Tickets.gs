@@ -10,6 +10,10 @@
  * Schritt 2: Menü "Check-in" → "Eintrittskarten (PDF) erzeugen".
  *   Pro Zeile im Blatt "QR-Codes" entstehen Vorder- UND Rückseite
  *   hintereinander (duplexfähig); das Druck-PDF landet in Google Drive.
+ *   Voraussetzung: der erweiterte Dienst "Google Slides API" muss im
+ *   Script-Editor aktiviert sein (Dienste → Slides API hinzufügen) —
+ *   die Karten werden gebündelt per batchUpdate erzeugt, sonst dauert
+ *   die Generierung viele Minuten.
  *
  * Platzhalter in der Vorlage: {{QR}} (Rechteck, wird durch den QR-Code
  * ersetzt), {{NAME}}, {{TICKET}}, {{GRUPPE}}, {{ORT}}.
@@ -88,52 +92,73 @@ function generateTicketPdf() {
     });
   }
 
-  // Vorlage kopieren und pro Ticket Vorder- + Rückseite anhängen
+  // Vorlage kopieren und pro Ticket Vorder- + Rückseite anhängen.
+  // Alle Operationen laufen gebündelt über die Slides API (batchUpdate),
+  // sonst dauern hunderte Einzelaufrufe viele Minuten.
   const copy = DriveApp.getFileById(templateId)
     .makeCopy('Eintrittskarten ' + fmt_(new Date()));
-  const deck = SlidesApp.openById(copy.getId());
-  const tplSlides = deck.getSlides();
-  const frontTpl = tplSlides[0];
-  const backTpl = tplSlides.length > 1 ? tplSlides[1] : null;
+  const presId = copy.getId();
 
-  let done = 0;
-  qData.forEach(t => {
-    done++;
-    if (done % 3 === 0 || done === qData.length) {
-      setProgress_(done, qData.length, 'Karten werden erzeugt …');
-    }
-    const code = String(t[Q.CODE - 1]).trim();
-    if (!code) return;
-    const p = persons[t[Q.ID - 1]];
-    const name = (p ? p[P.ANREDE - 1] + ' ' : '') +
-      t[Q.VORNAME - 1] + ' ' + t[Q.NAME - 1];
+  const pres = Slides.Presentations.get(presId);
+  const frontId = pres.slides[0].objectId;
+  const backId = pres.slides.length > 1 ? pres.slides[1].objectId : null;
 
-    const slide = frontTpl.duplicate();
-    slide.move(deck.getSlides().length); // ans Ende, hält die Reihenfolge
-    slide.replaceAllText('{{NAME}}', name);
-    slide.replaceAllText('{{TICKET}}', 'Ticket ' + ticketNo_(t[Q.TICKET - 1]));
-    slide.replaceAllText('{{GRUPPE}}', p ? String(p[P.GRUPPE - 1]) : '');
-    slide.replaceAllText('{{ORT}}', p ? String(p[P.ORT - 1]) : '');
+  const tickets = qData.filter(t => String(t[Q.CODE - 1]).trim());
+  let slideCount = pres.slides.length;
+  const CHUNK = 30; // Karten pro batchUpdate-Aufruf
 
-    // {{QR}}-Rechteck durch das QR-Bild ersetzen (behält Größe/Position)
-    slide.getShapes().forEach(shape => {
-      const txt = shape.getText && shape.getText().asString();
-      if (txt && txt.indexOf('{{QR}}') !== -1) {
-        shape.replaceWithImage(
-          'https://quickchart.io/qr?size=600&margin=1&text=' +
-          encodeURIComponent(code));
+  for (let c = 0; c < tickets.length; c += CHUNK) {
+    const requests = [];
+    tickets.slice(c, c + CHUNK).forEach((t, j) => {
+      const i = c + j;
+      const code = String(t[Q.CODE - 1]).trim();
+      const p = persons[t[Q.ID - 1]];
+      const name = (p ? p[P.ANREDE - 1] + ' ' : '') +
+        t[Q.VORNAME - 1] + ' ' + t[Q.NAME - 1];
+      const fId = 'tickf_' + i;
+      const bId = 'tickb_' + i;
+
+      // Vorder- und Rückseite duplizieren und ans Ende schieben
+      requests.push({ duplicateObject:
+        { objectId: frontId, objectIds: { [frontId]: fId } } });
+      const moveIds = [fId];
+      if (backId) {
+        requests.push({ duplicateObject:
+          { objectId: backId, objectIds: { [backId]: bId } } });
+        moveIds.push(bId);
       }
+      slideCount += moveIds.length;
+      requests.push({ updateSlidesPosition:
+        { slideObjectIds: moveIds, insertionIndex: slideCount } });
+
+      // Platzhalter nur auf der neuen Vorderseite ersetzen
+      requests.push(textReplace_(fId, '{{NAME}}', name));
+      requests.push(textReplace_(fId, '{{TICKET}}',
+        'Ticket ' + ticketNo_(t[Q.TICKET - 1])));
+      requests.push(textReplace_(fId, '{{GRUPPE}}', p ? p[P.GRUPPE - 1] : ''));
+      requests.push(textReplace_(fId, '{{ORT}}', p ? p[P.ORT - 1] : ''));
+
+      // {{QR}}-Rechteck durch das QR-Bild ersetzen (behält Größe/Position)
+      requests.push({ replaceAllShapesWithImage: {
+        containsText: { text: '{{QR}}' },
+        imageUrl: 'https://quickchart.io/qr?size=600&margin=1&text=' +
+          encodeURIComponent(code),
+        imageReplaceMethod: 'CENTER_INSIDE',
+        pageObjectIds: [fId]
+      }});
     });
 
-    // Rückseite direkt hinter die Vorderseite
-    if (backTpl) backTpl.duplicate().move(deck.getSlides().length);
-  });
+    Slides.Presentations.batchUpdate({ requests: requests }, presId);
+    setProgress_(Math.min(c + CHUNK, tickets.length), tickets.length,
+      'Karten werden erzeugt …');
+  }
 
   // Vorlagen-Folien aus dem Ergebnis entfernen
-  frontTpl.remove();
-  if (backTpl) backTpl.remove();
-  setProgress_(qData.length, qData.length, 'PDF wird exportiert …');
-  deck.saveAndClose();
+  const cleanup = [{ deleteObject: { objectId: frontId } }];
+  if (backId) cleanup.push({ deleteObject: { objectId: backId } });
+  Slides.Presentations.batchUpdate({ requests: cleanup }, presId);
+
+  setProgress_(tickets.length, tickets.length, 'PDF wird exportiert …');
 
   const pdf = DriveApp.createFile(
     copy.getAs('application/pdf').setName(copy.getName() + '.pdf'));
@@ -143,8 +168,16 @@ function generateTicketPdf() {
   PropertiesService.getDocumentProperties()
     .setProperty('LAST_PDF_ID', pdf.getId());
 
-  return { count: qData.length, url: pdf.getUrl(),
+  return { count: tickets.length, url: pdf.getUrl(),
            fileId: pdf.getId(), name: pdf.getName() };
+}
+
+function textReplace_(slideId, find, repl) {
+  return { replaceAllText: {
+    containsText: { text: find, matchCase: true },
+    replaceText: String(repl || ''),
+    pageObjectIds: [slideId]
+  }};
 }
 
 /***** Direkt-Download des PDFs aus dem Sheet (ohne Google Drive) *****/
