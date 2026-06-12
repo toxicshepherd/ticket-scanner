@@ -87,15 +87,20 @@ nicht löschen.
 
 ## Scanner-Seite
 
-Zeigt nach jedem Scan groß und farbig:
+Für den Einsatz auf einem Convertible/Laptop im Querformat optimiert
+(auf dem Handy im Hochformat stapelt sich das Layout automatisch):
 
-- **grün:** „✔ Eingecheckt (Ticket 1/2)" mit Name, Studiengruppe · Studienort und Uhrzeit
-- **gelb:** „⚠ BEREITS EINGECHECKT" mit Person, Ticket-Nr. und ursprünglicher Einlasszeit
-- **rot:** „✘ Ungültiger Code"
+- **links:** großes Kamerabild — es wird das **gesamte Bild** ausgewertet,
+  kein Ziel-Quadrat nötig
+- **rechts:** aktuelles Ergebnis groß und farbig (grün „✔ Eingecheckt",
+  gelb „⚠ BEREITS EINGECHECKT" mit ursprünglicher Einlasszeit, rot
+  „✘ Ungültiger Code"), darunter **Statistiken** (Fortschrittsbalken
+  „Eingecheckt: X von Y Tickets" plus Sitzungszähler OK/Doppelt/Ungültig)
+  und der **Verlauf** der letzten 50 Scans mit Uhrzeit
 
-plus Vibration und Gesamt-Zähler („Eingecheckt gesamt: X von Y Tickets").
 Nach jedem Scan geht es automatisch nach 3 Sekunden weiter; der
-„Weiter"-Button überspringt die Wartezeit.
+„Weiter"-Button überspringt die Wartezeit. Vibration gibt es zusätzlich
+auf Geräten, die das unterstützen.
 
 ## Einrichtung
 
