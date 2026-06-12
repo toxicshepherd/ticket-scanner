@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html>
   <body>
-    <p>Eine oder mehrere PDF-Dateien auswählen:</p>
-    <input type="file" id="pdfFiles" accept="application/pdf" multiple />
+    <p>Eine oder mehrere XLSX-Dateien auswählen<br>
+      <small>(Spalten: Anrede, Name, Vorname, StO, Einstellungsjahr, …, neue StGr)</small>:
+    </p>
+    <input type="file" id="pdfFiles"
+      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      multiple />
     <button id="uploadBtn" onclick="upload()">Hochladen</button>
     <pre id="status" style="white-space: pre-wrap; font-family: inherit;"></pre>
     <script>
@@ -34,7 +38,7 @@
             .withSuccessHandler(msg => next(files, i + 1, results.concat(msg)))
             .withFailureHandler(err =>
               next(files, i + 1, results.concat('Fehler bei ' + files[i].name + ': ' + err.message)))
-            .processPdf(base64, files[i].name);
+            .processXlsx(base64, files[i].name);
         };
         reader.readAsDataURL(files[i]);
       }
