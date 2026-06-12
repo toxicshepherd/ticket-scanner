@@ -1,30 +1,85 @@
 /***** Eintrittskarten als PDF erzeugen (Serien-Generierung über Google Slides) *****
  *
- * Einmalige Vorbereitung:
- * 1. Neue Google-Slides-Präsentation anlegen, Seitenformat auf die Karten-
- *    größe stellen (Datei → Seiteneinrichtung → Benutzerdefiniert,
- *    z. B. 21 x 9,9 cm für DIN lang).
- * 2. Das Karten-Design als Bild einfügen (PDF-Seite vorher als PNG/JPG
- *    exportieren) und auf die volle Foliengröße ziehen.
- * 3. Dort, wo der QR-Code hin soll, ein Rechteck einfügen, das als Text
- *    nur {{QR}} enthält. Größe/Position des Rechtecks = Größe des QR-Codes.
- * 4. Optional Textfelder mit Platzhaltern einfügen:
- *    {{NAME}}, {{TICKET}}, {{GRUPPE}}, {{ORT}}
- * 5. Die ID der Präsentation (aus der URL zwischen /d/ und /edit)
- *    unten bei TICKET_TEMPLATE_ID eintragen.
+ * Schritt 1: Menü "Check-in" → "Karten-Vorlage (Slides) erzeugen".
+ *   Baut die Slides-Vorlage automatisch: Karten-Design als Hintergrund,
+ *   QR-Code-Platzhalter auf dem Abriss (vorne links), Name + Ticket-Nr.
+ *   darunter. Die Vorlagen-ID wird automatisch gespeichert.
+ *   Voraussetzung: der erweiterte Dienst "Google Slides API" muss im
+ *   Script-Editor aktiviert sein (Dienste → Slides API hinzufügen) —
+ *   er wird nur für das Anlegen mit der richtigen Foliengröße gebraucht.
+ *   Die Vorlage kann danach in Slides beliebig nachjustiert werden.
  *
- * Danach: Menü "Check-in" → "Eintrittskarten (PDF) erzeugen".
- * Pro Zeile im Blatt "QR-Codes" entsteht eine Karte; das fertige PDF
- * wird in Google Drive abgelegt.
+ * Schritt 2: Menü "Check-in" → "Eintrittskarten (PDF) erzeugen".
+ *   Pro Zeile im Blatt "QR-Codes" entsteht eine Karte; das fertige
+ *   Druck-PDF wird in Google Drive abgelegt.
+ *
+ * Platzhalter in der Vorlage: {{QR}} (Rechteck, wird durch den QR-Code
+ * ersetzt), {{NAME}}, {{TICKET}}, {{GRUPPE}}, {{ORT}}.
  */
 
-const TICKET_TEMPLATE_ID = 'HIER_SLIDES_VORLAGEN_ID_EINTRAGEN';
+// Karten-Design (Vorderseite, 300 dpi) — liegt im GitHub-Repo
+const TICKET_DESIGN_URL =
+  'https://raw.githubusercontent.com/toxicshepherd/ticket-scanner/main/design/karte-vorderseite.png';
+
+// Kartenmaß in Punkt (aus dem InDesign-PDF: 21,2 x 10 cm)
+const CARD_W = 600.945;
+const CARD_H = 283.465;
+
+function templateId_() {
+  return PropertiesService.getDocumentProperties().getProperty('TICKET_TEMPLATE_ID');
+}
+
+/** Baut die Slides-Vorlage automatisch und merkt sich ihre ID. */
+function buildTicketTemplate() {
+  const ui = SpreadsheetApp.getUi();
+
+  // Folie in Kartengröße anlegen (geht nur über die Slides API)
+  const created = Slides.Presentations.create({
+    title: 'Eintrittskarten-Vorlage',
+    pageSize: {
+      width:  { magnitude: CARD_W, unit: 'PT' },
+      height: { magnitude: CARD_H, unit: 'PT' }
+    }
+  });
+  const deck = SlidesApp.openById(created.presentationId);
+  const slide = deck.getSlides()[0];
+  slide.getPageElements().forEach(el => el.remove()); // Standard-Platzhalter weg
+
+  // Design als Hintergrund in voller Kartengröße
+  slide.insertImage(TICKET_DESIGN_URL, 0, 0, CARD_W, CARD_H);
+
+  // {{QR}}-Rechteck oben auf dem Abriss (Abriss = linke ~114 pt)
+  const qr = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 14.5, 22, 85, 85);
+  qr.getFill().setSolidFill('#FFFFFF');
+  qr.getBorder().setTransparent();
+  qr.getText().setText('{{QR}}');
+  qr.getText().getTextStyle().setFontSize(10).setForegroundColor('#000000');
+  qr.getText().getParagraphStyle()
+    .setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+
+  // Name + Ticket-Nr. unter dem QR-Code, weiß auf blau
+  const tb = slide.insertTextBox('{{NAME}}\n{{TICKET}}', 4, 112, 106, 42);
+  const text = tb.getText();
+  text.getTextStyle().setFontSize(8).setForegroundColor('#FFFFFF');
+  text.getParagraphStyle()
+    .setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+  text.getRange(0, '{{NAME}}'.length).getTextStyle().setBold(true);
+
+  deck.saveAndClose();
+  PropertiesService.getDocumentProperties()
+    .setProperty('TICKET_TEMPLATE_ID', created.presentationId);
+
+  ui.alert('Vorlage erstellt und verknüpft.\n\nZum Nachjustieren öffnen:\n' +
+    'https://docs.google.com/presentation/d/' + created.presentationId + '/edit');
+}
 
 function generateTicketPdf() {
   const ui = SpreadsheetApp.getUi();
-  if (TICKET_TEMPLATE_ID.indexOf('HIER_') === 0) {
-    ui.alert('Bitte zuerst in Tickets.gs die ID der Slides-Vorlage bei ' +
-      'TICKET_TEMPLATE_ID eintragen (Anleitung im Dateikopf).');
+  const templateId = templateId_();
+  if (!templateId) {
+    ui.alert('Bitte zuerst über das Menü "Karten-Vorlage (Slides) erzeugen" ' +
+      'die Vorlage anlegen (oder deren ID in den Dokument-Eigenschaften ' +
+      'unter TICKET_TEMPLATE_ID hinterlegen).');
     return;
   }
 
@@ -44,7 +99,7 @@ function generateTicketPdf() {
   }
 
   // Vorlage kopieren und pro Ticket eine Folie füllen
-  const copy = DriveApp.getFileById(TICKET_TEMPLATE_ID)
+  const copy = DriveApp.getFileById(templateId)
     .makeCopy('Eintrittskarten ' + fmt_(new Date()));
   const deck = SlidesApp.openById(copy.getId());
   const template = deck.getSlides()[0];

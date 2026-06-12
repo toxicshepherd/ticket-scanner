@@ -39,12 +39,16 @@ nicht löschen.
   erzeugt/entfernt und neu nummeriert (`1/3`, `2/3`, `3/3`). Bereits
   eingecheckte Tickets werden nie gelöscht. Nach einer Migration einmal
   ausführen, damit auch die übernommenen Personen die richtige Anzahl erhalten.
-- **Eintrittskarten (PDF) erzeugen** — Serien-Generierung über eine
-  Google-Slides-Vorlage (`apps-script/Tickets.gs`): pro Ticket eine Karte mit
-  dem eigenen Design als Hintergrund, personalisiertem QR-Code und optionalen
-  Platzhaltern `{{NAME}}`, `{{TICKET}}`, `{{GRUPPE}}`, `{{ORT}}`. Das fertige
-  Druck-PDF landet in Google Drive. Einrichtung der Vorlage: siehe Kommentar
-  am Anfang von `Tickets.gs`.
+- **Karten-Vorlage (Slides) erzeugen** — baut die Slides-Vorlage automatisch:
+  Karten-Design (`design/karte-vorderseite.png`) als Hintergrund, QR-Platzhalter
+  auf dem Abriss vorne links, Name + Ticket-Nr. darunter. Die Vorlagen-ID wird
+  automatisch gespeichert; die Vorlage kann danach in Slides nachjustiert
+  werden. Voraussetzung: erweiterter Dienst **Google Slides API** im
+  Script-Editor aktiviert.
+- **Eintrittskarten (PDF) erzeugen** — Serien-Generierung aus der Vorlage
+  (`apps-script/Tickets.gs`): pro Ticket eine Karte mit personalisiertem
+  QR-Code und den Platzhaltern `{{NAME}}`, `{{TICKET}}`, `{{GRUPPE}}`,
+  `{{ORT}}`. Das fertige Druck-PDF landet in Google Drive.
 - **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
   alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
   Struktur; vorhandene Codes und Check-ins bleiben gültig.
