@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: sans-serif; margin: 16px;">
+    <p id="label">Starte …</p>
+    <div style="background:#eee; border-radius:6px; height:22px; overflow:hidden;">
+      <div id="bar" style="background:#4285f4; height:100%; width:0%;
+                           border-radius:6px; transition:width .4s;"></div>
+    </div>
+    <p id="count" style="color:#555;"></p>
+    <div id="result"></div>
+    <script>
+      const label = document.getElementById('label');
+      const bar = document.getElementById('bar');
+      const count = document.getElementById('count');
+      const result = document.getElementById('result');
+
+      // Eine Datei stückweise vom Script laden und Download anstoßen
+      function downloadFile(fileId, doneCb) {
+        const parts = [];
+        function next(i) {
+          google.script.run
+            .withSuccessHandler(c => {
+              parts.push(Uint8Array.from(atob(c.data), ch => ch.charCodeAt(0)));
+              if (c.more) {
+                count.textContent = 'Lade ' + c.name + ' … Teil ' + (i + 2);
+                next(i + 1);
+              } else {
+                const url = URL.createObjectURL(
+                  new Blob(parts, { type: 'application/zip' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = c.name;
+                a.textContent = c.name + ' erneut herunterladen';
+                document.body.appendChild(a);
+                a.click();
+                result.appendChild(a);
+                result.appendChild(document.createElement('br'));
+                doneCb();
+              }
+            })
+            .withFailureHandler(e => {
+              count.textContent = 'Fehler beim Laden: ' + e.message;
+            })
+            .getPdfChunk(fileId, i);
+        }
+        next(0);
+      }
+
+      function downloadAll(zips, i) {
+        if (i >= zips.length) {
+          label.textContent = 'Fertig – alle ZIP-Teile heruntergeladen.';
+          count.textContent =
+            'Entpacken und mit dem Outlook-Makro (SendTickets.bas) verschicken.';
+          return;
+        }
+        count.textContent = 'Lade ' + zips[i].name + ' …';
+        downloadFile(zips[i].fileId, () => downloadAll(zips, i + 1));
+      }
+
+      // Generierung starten; danach alle ZIP-Teile herunterladen
+      google.script.run
+        .withSuccessHandler(res => {
+          clearInterval(timer);
+          bar.style.width = '100%';
+          label.textContent = 'Fertig: ' + res.count + ' Einzel-PDFs in ' +
+            res.parts.length + ' ZIP-Datei(en).';
+          downloadAll(res.parts, 0);
+        })
+        .withFailureHandler(err => {
+          clearInterval(timer);
+          label.textContent = 'Fehler: ' + err.message;
+        })
+        .generateTicketZips();
+
+      // Fortschritt alle 2 Sekunden abfragen
+      const timer = setInterval(() => {
+        google.script.run.withSuccessHandler(p => {
+          if (!p) return;
+          label.textContent = p.label;
+          count.textContent = p.total ? p.done + ' von ' + p.total + ' Tickets' : '';
+          bar.style.width =
+            (p.total ? Math.round(100 * p.done / p.total) : 0) + '%';
+        }).getTicketProgress();
+      }, 2000);
+    </script>
+  </body>
+</html>
