@@ -23,6 +23,7 @@ function onOpen() {
     .addItem('Teilnehmer-PDFs hochladen', 'showUploadDialog')
     .addItem('Ticket-Anzahl pro Person festlegen', 'setTicketCount')
     .addItem('QR-Codes mit Ticket-Anzahl abgleichen', 'syncAllTickets')
+    .addItem('Karten-Vorlage (Slides) erzeugen', 'buildTicketTemplate')
     .addItem('Eintrittskarten (PDF) erzeugen', 'generateTicketPdf')
     .addSeparator()
     .addItem('Altes Teilnehmer-Blatt übernehmen (Migration)', 'migrateOldSheet')
