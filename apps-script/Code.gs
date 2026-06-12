@@ -26,6 +26,7 @@ function onOpen() {
     .addItem('Eintrittskarten (PDF) erzeugen', 'showTicketProgressDialog')
     .addItem('Letzte Karten-PDF herunterladen', 'showPdfDownloadDialog')
     .addSeparator()
+    .addItem('Liste leeren (alle Personen + QR-Codes)', 'clearAllData')
     .addItem('Altes Teilnehmer-Blatt übernehmen (Migration)', 'migrateOldSheet')
     .addToUi();
 }
@@ -63,6 +64,41 @@ function qrSheet_() {
   // Ticket-Nr. "1/2" als Klartext erzwingen, sonst macht Sheets ein Datum daraus
   sheet.getRange(1, Q.TICKET, sheet.getMaxRows()).setNumberFormat('@');
   return sheet;
+}
+
+/**
+ * Letzte Zeile, in der die angegebene Spalte wirklich Inhalt hat.
+ * Wichtig beim Anhängen: getLastRow() zählt auch "Geisterzeilen" mit,
+ * in denen z. B. nur noch die versteckte ID steht, weil Zeilen nur
+ * geleert statt gelöscht wurden.
+ */
+function lastContentRow_(sheet, col) {
+  const last = sheet.getLastRow();
+  if (last < 2) return 1;
+  const vals = sheet.getRange(2, col, last - 1, 1).getValues();
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]).trim()) return i + 2;
+  }
+  return 1;
+}
+
+/** Setzt ein Blatt komplett zurück: alle Datenzeilen weg, Kopfzeile neu. */
+function resetSheet_(sheet, header) {
+  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  sheet.getRange(1, 1, 1, sheet.getMaxColumns()).clearContent();
+  sheet.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+}
+
+function clearAllData() {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.alert('Liste leeren',
+    'Wirklich ALLE Personen und QR-Codes löschen?\n' +
+    'Auch vorhandene Check-ins gehen verloren.', ui.ButtonSet.YES_NO);
+  if (resp !== ui.Button.YES) return;
+  resetSheet_(personenSheet_(), P_HEADER);
+  resetSheet_(qrSheet_(), Q_HEADER);
+  ui.alert('Beide Blätter sind geleert. Jetzt können die XLSX-Listen ' +
+    'frisch importiert werden.');
 }
 
 /**
@@ -130,7 +166,8 @@ function processXlsx(base64Data, fileName) {
 
   const ps = personenSheet_();
   const qs = qrSheet_();
-  const startRow = ps.getLastRow() + 1;
+  // Hinter dem letzten echten Namen anhängen, nicht hinter Geisterzeilen
+  const startRow = lastContentRow_(ps, P.NAME) + 1;
 
   // Jede importierte Person bekommt die über das Menü festgelegte
   // Ticket-Anzahl (Standard: 1)
@@ -147,7 +184,7 @@ function processXlsx(base64Data, fileName) {
   });
 
   ps.getRange(startRow, 1, pValues.length, P_HEADER.length).setValues(pValues);
-  const qStart = qs.getLastRow() + 1;
+  const qStart = lastContentRow_(qs, Q.CODE) + 1;
   qs.getRange(qStart, 1, tickets.length, Q_HEADER.length).setValues(tickets);
   qs.setRowHeights(qStart, tickets.length, 60); // Platz für die QR-Bilder
 

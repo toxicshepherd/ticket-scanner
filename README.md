@@ -55,6 +55,10 @@ nicht löschen.
   dort, wo drive.google.com gesperrt ist) und liegt zusätzlich in Google Drive.
 - **Letzte Karten-PDF herunterladen** — lädt das zuletzt erzeugte PDF erneut
   direkt im Browser herunter, ohne Google Drive zu öffnen.
+- **Liste leeren (alle Personen + QR-Codes)** — setzt beide Blätter komplett
+  zurück (inkl. Kopfzeilen), z. B. vor einem frischen Import. Wichtig: Zeilen
+  von Hand nur zu leeren reicht nicht, weil die versteckte ID-Spalte gefüllt
+  bleibt und neue Importe dann darunter angehängt werden.
 - **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
   alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
   Struktur; vorhandene Codes und Check-ins bleiben gültig.
