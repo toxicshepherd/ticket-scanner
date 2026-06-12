@@ -83,7 +83,20 @@
          .catch(e => resultEl.textContent = 'Kamerafehler: ' + e);
       }
 
+      // Denselben Code kurz ignorieren, damit nach dem automatischen
+      // Weiterschalten nicht sofort eine Duplikat-Warnung erscheint,
+      // solange das Ticket noch vor der Kamera ist
+      let lastCode = '', lastTime = 0;
+
       function onScan(code) {
+        const now = Date.now();
+        if (code === lastCode && now - lastTime < 8000) {
+          lastTime = now;
+          return;
+        }
+        lastCode = code;
+        lastTime = now;
+
         scanner.pause();
         resultEl.className = '';
         resultEl.textContent = 'Prüfe…';
@@ -134,11 +147,22 @@
           statsEl.textContent =
             'Eingecheckt gesamt: ' + res.sumChecked + ' von ' + res.sumTotal + ' Tickets';
         }
-        againBtn.style.display = 'inline-block';
         if (navigator.vibrate) navigator.vibrate(res.status === 'ok' ? 100 : [80, 60, 80]);
+
+        // Nach 3 Sekunden automatisch weiter; Button erlaubt Sofort-Weiter
+        againBtn.style.display = 'inline-block';
+        let countdown = 3;
+        againBtn.textContent = 'Weiter (' + countdown + ')';
+        resumeTimer = setInterval(() => {
+          countdown--;
+          if (countdown <= 0) restart();
+          else againBtn.textContent = 'Weiter (' + countdown + ')';
+        }, 1000);
       }
 
+      let resumeTimer = null;
       function restart() {
+        clearInterval(resumeTimer);
         againBtn.style.display = 'none';
         resultEl.className = '';
         resultEl.textContent = 'Bereit zum Scannen';
