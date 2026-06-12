@@ -139,5 +139,52 @@ function generateTicketPdf() {
     copy.getAs('application/pdf').setName(copy.getName() + '.pdf'));
   copy.setTrashed(true); // Slides-Zwischendatei aufräumen
 
-  return { count: qData.length, url: pdf.getUrl() };
+  // Für den Direkt-Download aus dem Sheet merken (Drive kann gesperrt sein)
+  PropertiesService.getDocumentProperties()
+    .setProperty('LAST_PDF_ID', pdf.getId());
+
+  return { count: qData.length, url: pdf.getUrl(),
+           fileId: pdf.getId(), name: pdf.getName() };
+}
+
+/***** Direkt-Download des PDFs aus dem Sheet (ohne Google Drive) *****/
+
+const PDF_CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB pro Häppchen
+
+/**
+ * Liefert das PDF stückweise als Base64 an den Dialog, der daraus im
+ * Browser die Datei zusammensetzt — funktioniert auch dort, wo
+ * drive.google.com gesperrt ist.
+ */
+function getPdfChunk(fileId, index) {
+  const file = DriveApp.getFileById(fileId);
+  const bytes = file.getBlob().getBytes();
+  const start = index * PDF_CHUNK_SIZE;
+  const end = Math.min(start + PDF_CHUNK_SIZE, bytes.length);
+  return {
+    data: Utilities.base64Encode(bytes.slice(start, end)),
+    more: end < bytes.length,
+    name: file.getName()
+  };
+}
+
+function getLastPdf() {
+  const id = PropertiesService.getDocumentProperties().getProperty('LAST_PDF_ID');
+  if (!id) return null;
+  try {
+    return { fileId: id, name: DriveApp.getFileById(id).getName() };
+  } catch (e) {
+    return null; // Datei wurde gelöscht
+  }
+}
+
+function showPdfDownloadDialog() {
+  if (!getLastPdf()) {
+    SpreadsheetApp.getUi().alert('Noch kein Karten-PDF erzeugt. Bitte zuerst ' +
+      '"Eintrittskarten (PDF) erzeugen" ausführen.');
+    return;
+  }
+  const html = HtmlService.createHtmlOutputFromFile('Download')
+    .setWidth(380).setHeight(150);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Karten-PDF herunterladen');
 }

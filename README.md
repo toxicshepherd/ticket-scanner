@@ -48,7 +48,10 @@ nicht löschen.
   (`apps-script/Tickets.gs`): pro Ticket Vorder- **und** Rückseite
   hintereinander (duplexfähig), mit personalisiertem QR-Code und den
   Platzhaltern `{{NAME}}`, `{{TICKET}}`, `{{GRUPPE}}`, `{{ORT}}`.
-  Das fertige Druck-PDF landet in Google Drive.
+  Das fertige PDF wird direkt im Browser heruntergeladen (funktioniert auch
+  dort, wo drive.google.com gesperrt ist) und liegt zusätzlich in Google Drive.
+- **Letzte Karten-PDF herunterladen** — lädt das zuletzt erzeugte PDF erneut
+  direkt im Browser herunter, ohne Google Drive zu öffnen.
 - **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
   alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
   Struktur; vorhandene Codes und Check-ins bleiben gültig.
