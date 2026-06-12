@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <p>Eine oder mehrere PDF-Dateien auswählen:</p>
+    <input type="file" id="pdfFiles" accept="application/pdf" multiple />
+    <button id="uploadBtn" onclick="upload()">Hochladen</button>
+    <pre id="status" style="white-space: pre-wrap; font-family: inherit;"></pre>
+    <script>
+      const statusEl = document.getElementById('status');
+
+      function upload() {
+        const files = Array.from(document.getElementById('pdfFiles').files);
+        if (!files.length) return;
+        document.getElementById('uploadBtn').disabled = true;
+        next(files, 0, []);
+      }
+
+      // Dateien nacheinander verarbeiten, damit die Zeilen im Sheet
+      // nicht durcheinandergeraten und kein Aufruf zu groß wird
+      function next(files, i, results) {
+        if (i >= files.length) {
+          statusEl.textContent = results.join('\n') + '\n\nFertig.';
+          setTimeout(() => google.script.host.close(), 3000);
+          return;
+        }
+        statusEl.textContent = results.concat(
+          'Datei ' + (i + 1) + '/' + files.length + ': ' + files[i].name + ' …'
+        ).join('\n');
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const base64 = e.target.result.split(',')[1];
+          google.script.run
+            .withSuccessHandler(msg => next(files, i + 1, results.concat(msg)))
+            .withFailureHandler(err =>
+              next(files, i + 1, results.concat('Fehler bei ' + files[i].name + ': ' + err.message)))
+            .processPdf(base64, files[i].name);
+        };
+        reader.readAsDataURL(files[i]);
+      }
+    </script>
+  </body>
+</html>

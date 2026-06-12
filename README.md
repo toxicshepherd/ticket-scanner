@@ -1,53 +1,83 @@
 # Ticket-Scanner
 
-Statische Scanner-Seite für das Ticket-Check-in-System. Die Seite scannt QR-Codes
-mit der Handykamera und meldet den gescannten Code an ein Google-Apps-Script,
-das die Teilnehmerliste in Google Sheets abgleicht und den Check-in-Zeitstempel einträgt.
+Check-in-System für Veranstaltungen: Teilnehmer werden per PDF in ein Google Sheet
+importiert, bekommen pro Person eine einstellbare Anzahl QR-Code-Tickets, und am
+Einlass werden die Codes mit der Handykamera über diese Scanner-Seite gescannt.
 
-**Live-URL (GitHub Pages):** https://toxicshepherd.github.io/ticket-scanner/
+**Scanner (GitHub Pages):** https://toxicshepherd.github.io/ticket-scanner/
+
+## Aufbau
+
+| Teil | Ort |
+|---|---|
+| `index.html` | Scanner-Seite, gehostet über GitHub Pages |
+| `apps-script/Code.gs` | Apps Script (an das Google Sheet gebunden): PDF-Import, Ticket-Verwaltung, Check-in-Endpunkt |
+| `apps-script/Upload.html` | Dialog zum Hochladen mehrerer Teilnehmer-PDFs |
+| `apps-script/Scanner.html` | Fallback-Scanner direkt in der Web-App (nur Foto-Modus, da Apps Script die Live-Kamera blockiert) |
+
+### Tabellenstruktur
+
+Das Script legt zwei Blätter automatisch an:
+
+- **Personen** — eine Zeile pro Person: Anrede, Name, Vorname, Studiengruppe,
+  Studienort, **Tickets** (Anzahl), **Eingecheckt** (z. B. `1/2`, `2/2`),
+  **Check-ins** (Datum + Uhrzeit jedes Scans). Farben: gelb = teilweise
+  eingecheckt, grün = vollständig eingecheckt, orange = Namens-Trennung beim
+  PDF-Import unsicher (bitte prüfen).
+- **QR-Codes** — eine Zeile pro Ticket: Name, Vorname, Ticket-Nr. (z. B. `2/2`),
+  QR-String, QR-Bild, Check-in-Zeitstempel. Eingecheckte Tickets werden grün.
+
+Die ausgeblendete Spalte „ID" auf dem Personen-Blatt verknüpft beide Blätter —
+nicht löschen.
+
+## Bedienung (Menü „Check-in" im Sheet)
+
+- **Teilnehmer-PDFs hochladen** — eine oder mehrere PDFs auswählen; jede Person
+  startet mit 1 Ticket.
+- **Ticket-Anzahl für markierte Personen festlegen** — Zeilen im Blatt „Personen"
+  markieren, Anzahl eingeben; QR-Codes werden automatisch erzeugt/entfernt und
+  neu nummeriert (`1/3`, `2/3`, `3/3`). Bereits eingecheckte Tickets werden nie
+  gelöscht. Alternativ die Spalte „Tickets" direkt bearbeiten und danach
+  **QR-Codes mit Ticket-Anzahl abgleichen** ausführen.
+- **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
+  alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
+  Struktur; vorhandene Codes und Check-ins bleiben gültig.
+
+## Scanner-Seite
+
+Zeigt nach jedem Scan groß und farbig:
+
+- **grün:** „✔ Eingecheckt (Ticket 1/2)" mit Name, Studiengruppe · Studienort und Uhrzeit
+- **gelb:** „⚠ BEREITS EINGECHECKT" mit Person, Ticket-Nr. und ursprünglicher Einlasszeit
+- **rot:** „✘ Ungültiger Code"
+
+plus Vibration, Gesamt-Zähler („Eingecheckt gesamt: X von Y Tickets") und den
+Button „Nächsten scannen".
 
 ## Einrichtung
 
-### 1. Apps-Script-Web-App-URL eintragen
-
-Beim ersten Aufruf fragt die Seite nach der URL der Apps-Script-Web-App
-(die `/exec`-URL aus der Bereitstellung, Zugriff: „Jeder"). Die URL wird im
-`localStorage` des Browsers gespeichert und muss nur einmal pro Gerät eingegeben werden.
-
-Alternativ kann die URL als Parameter übergeben werden, z. B. zum Verteilen
-eines fertigen Links an das Einlass-Team:
-
-```
-https://toxicshepherd.github.io/ticket-scanner/?api=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
-```
-
-### 2. GitHub Pages aktivieren
-
-Im Repository unter **Settings → Pages**:
-
-- **Source:** Deploy from a branch
-- **Branch:** `main`, Ordner `/ (root)`
-
-Nach wenigen Minuten ist die Seite unter https://toxicshepherd.github.io/ticket-scanner/ erreichbar.
+1. **Apps Script:** Inhalte aus `apps-script/` in den an das Sheet gebundenen
+   Script-Editor kopieren (`Code.gs`, plus HTML-Dateien `Upload` und `Scanner`).
+   Der erweiterte Dienst **Drive API** muss aktiviert sein (für den PDF-Import).
+2. **Web-App bereitstellen:** Bereitstellen → Neue Bereitstellung → Web-App,
+   Zugriff „Jeder". Die `/exec`-URL kopieren. Nach Code-Änderungen die
+   Bereitstellung aktualisieren, sonst läuft die alte Version weiter.
+3. **Scanner verbinden:** Beim ersten Aufruf der Scanner-Seite die `/exec`-URL
+   eingeben (wird im `localStorage` gespeichert) — oder als fertigen Link verteilen:
+   ```
+   https://toxicshepherd.github.io/ticket-scanner/?api=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+   ```
+4. **GitHub Pages:** Settings → Pages → Source „Deploy from a branch",
+   Branch `main`, Ordner `/ (root)`.
 
 ## Hinweise
 
 - **HTTPS ist Pflicht:** Browser geben die Kamera (`getUserMedia`) nur über HTTPS
-  frei. GitHub Pages liefert automatisch HTTPS — die Seite daher nicht lokal über
-  `file://` oder unverschlüsseltes HTTP verwenden.
-- Die Seite wird bewusst **extern** (GitHub Pages) gehostet und nicht über Apps Script
-  ausgeliefert: `HtmlService` rendert Seiten in einem sandboxed iframe, der den
-  Kamerazugriff blockiert.
-- Der POST an Apps Script verwendet `Content-Type: text/plain` und `redirect: "follow"`,
-  damit kein CORS-Preflight entsteht (den Apps Script nicht beantwortet) und der
-  `/exec`-Weiterleitung gefolgt wird.
-
-## Ergebnisanzeige
-
-| Antwort des Scripts | Anzeige |
-|---|---|
-| `{status: "ok", person: …}` | grün: „✔ [Person] eingecheckt" |
-| `{status: "duplicate", person: …, time: …}` | gelb: „⚠ BEREITS EINGECHECKT ([Zeit]): [Person]" |
-| `{status: "invalid"}` | rot: „✘ Ungültiger Code" |
-
-Nach jedem Treffer pausiert der Scanner; mit **„Nächsten scannen"** geht es weiter.
+  frei. GitHub Pages liefert automatisch HTTPS.
+- Die Scanner-Seite wird bewusst **extern** (GitHub Pages) gehostet: Apps Script
+  HtmlService rendert Seiten in einem sandboxed iframe, der den Live-Kamerazugriff
+  blockiert. Die mitgelieferte `Scanner.html` in der Web-App dient nur als
+  Foto-Fallback.
+- Der POST an Apps Script verwendet `Content-Type: text/plain` und
+  `redirect: "follow"`, damit kein CORS-Preflight entsteht (den Apps Script nicht
+  beantwortet) und der `/exec`-Weiterleitung gefolgt wird.
