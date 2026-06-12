@@ -73,7 +73,9 @@ Button „Nächsten scannen".
    Zugriff „Jeder". Die `/exec`-URL kopieren. Nach Code-Änderungen die
    Bereitstellung aktualisieren, sonst läuft die alte Version weiter.
 3. **Scanner verbinden:** Beim ersten Aufruf der Scanner-Seite die `/exec`-URL
-   eingeben (wird im `localStorage` gespeichert) — oder als fertigen Link verteilen:
+   eingeben (wird im `localStorage` gespeichert; später änderbar über
+   „⚙ API-URL ändern" unten auf der Seite) — oder als fertigen Link verteilen
+   (die URL aus dem Link wird ebenfalls dauerhaft gespeichert):
    ```
    https://toxicshepherd.github.io/ticket-scanner/?api=https://script.google.com/macros/s/DEPLOYMENT_ID/exec
    ```

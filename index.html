@@ -23,6 +23,10 @@
       }
       #setup { padding: 16px; }
       #setup input { width: 90%; font-size: 1em; padding: 8px; }
+      .linkbtn {
+        background: none; color: #888; font-size: 0.85em;
+        text-decoration: underline; padding: 8px; margin: 16px 0 8px;
+      }
     </style>
   </head>
   <body>
@@ -39,6 +43,7 @@
     <div id="result"></div>
     <button id="again" style="display:none" onclick="restart()">Nächsten scannen</button>
     <div id="stats"></div>
+    <button id="changeApi" class="linkbtn" onclick="showSetup()">⚙ API-URL ändern</button>
 
     <script>
       const resultEl = document.getElementById('result');
@@ -47,8 +52,9 @@
       const scanner = new Html5Qrcode('reader');
 
       // API-URL aus ?api=...-Parameter oder localStorage; sonst Eingabemaske
-      let API_URL = new URLSearchParams(location.search).get('api')
-        || localStorage.getItem('apiUrl') || '';
+      const apiParam = new URLSearchParams(location.search).get('api');
+      if (apiParam) localStorage.setItem('apiUrl', apiParam); // dauerhaft merken
+      let API_URL = apiParam || localStorage.getItem('apiUrl') || '';
 
       function saveApi() {
         const v = document.getElementById('apiInput').value.trim();
@@ -56,10 +62,16 @@
           alert('Bitte die vollständige /exec-URL einfügen.');
           return;
         }
-        API_URL = v;
         localStorage.setItem('apiUrl', v);
-        document.getElementById('setup').style.display = 'none';
-        start();
+        // Neu laden, damit der Scanner sauber mit der neuen URL startet
+        location.href = location.pathname;
+      }
+
+      // Eingabemaske (wieder) öffnen, vorausgefüllt mit der aktuellen URL
+      function showSetup() {
+        document.getElementById('apiInput').value = API_URL;
+        document.getElementById('setup').style.display = 'block';
+        document.getElementById('apiInput').focus();
       }
 
       function start() {
@@ -136,7 +148,7 @@
       if (API_URL) {
         start();
       } else {
-        document.getElementById('setup').style.display = 'block';
+        showSetup();
       }
     </script>
   </body>
