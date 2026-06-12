@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+    <style>
+      body { font-family: sans-serif; margin: 0; text-align: center; }
+      #reader { width: 100%; max-width: 500px; margin: 0 auto; }
+      #result { padding: 20px 16px; min-height: 110px; }
+      #result .big  { font-size: 1.5em; font-weight: bold; }
+      #result .name { font-size: 1.3em; margin-top: 6px; }
+      #result .sub  { font-size: 1em; margin-top: 4px; opacity: 0.85; }
+      .ok        { background: #b7e1a1; }
+      .duplicate { background: #ffd966; }
+      .invalid   { background: #ea9999; }
+      #stats { padding: 8px; font-size: 0.95em; color: #555; }
+      button, label.btn {
+        display: inline-block; font-size: 1.1em; padding: 12px 24px;
+        margin: 12px; background: #4285f4; color: #fff;
+        border: none; border-radius: 6px;
+      }
+      input[type=file] { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="reader"></div>
+
+    <label class="btn" id="photoBtn" style="display:none" for="photoInput">
+      📷 QR-Code fotografieren
+    </label>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" />
+
+    <div id="result">Kamera startet…</div>
+    <button id="again" style="display:none" onclick="restart()">Nächsten scannen</button>
+    <div id="stats"></div>
+
+    <script>
+      const resultEl = document.getElementById('result');
+      const statsEl = document.getElementById('stats');
+      const againBtn = document.getElementById('again');
+      const photoBtn = document.getElementById('photoBtn');
+      const photoInput = document.getElementById('photoInput');
+      const scanner = new Html5Qrcode('reader');
+      let liveMode = false;
+
+      function startLive() {
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 220 },
+          onScan
+        ).then(() => {
+          liveMode = true;
+          resultEl.textContent = 'Bereit zum Scannen';
+        }).catch(() => {
+          photoBtn.style.display = 'inline-block';
+          resultEl.textContent =
+            'Live-Kamera nicht verfügbar – bitte den Code fotografieren.';
+        });
+      }
+
+      // Robuste Foto-Dekodierung: erst nativer BarcodeDetector,
+      // dann jsQR in mehreren Auflösungen
+      async function decodePhoto(file) {
+        const bitmap = await createImageBitmap(file);
+
+        if ('BarcodeDetector' in window) {
+          try {
+            const detector = new BarcodeDetector({ formats: ['qr_code'] });
+            const found = await detector.detect(bitmap);
+            if (found.length) return found[0].rawValue;
+          } catch (e) { /* weiter mit jsQR */ }
+        }
+
+        for (const targetW of [900, 1400, 600, 2000]) {
+          const scale = Math.min(1, targetW / bitmap.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(bitmap.width * scale);
+          canvas.height = Math.round(bitmap.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const hit = jsQR(img.data, img.width, img.height,
+                           { inversionAttempts: 'attemptBoth' });
+          if (hit && hit.data) return hit.data;
+        }
+        return null;
+      }
+
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files[0];
+        photoInput.value = '';
+        if (!file) return;
+        resultEl.className = '';
+        resultEl.textContent = 'Lese Code…';
+        try {
+          const code = await decodePhoto(file);
+          if (code) {
+            onScan(code);
+          } else {
+            resultEl.className = 'invalid';
+            resultEl.textContent =
+              'Kein QR-Code erkannt – Code formatfüllend und ohne Spiegelung fotografieren.';
+          }
+        } catch (e) {
+          resultEl.className = 'invalid';
+          resultEl.textContent = 'Fehler beim Lesen: ' + e.message;
+        }
+      });
+
+      function onScan(code) {
+        if (liveMode) scanner.pause();
+        resultEl.className = '';
+        resultEl.textContent = 'Prüfe…';
+        google.script.run
+          .withSuccessHandler(show)
+          .withFailureHandler(e => show({ status: 'error', message: e.message }))
+          .checkIn(code);
+      }
+
+      function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+      }
+
+      function show(res) {
+        if (res.status === 'ok') {
+          resultEl.className = 'ok';
+          resultEl.innerHTML =
+            '<div class="big">✔ Eingecheckt (Ticket ' + esc(res.ticket) + ')</div>' +
+            '<div class="name">' + esc(res.person) + '</div>' +
+            (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
+            '<div class="sub">' + esc(res.time) + ' Uhr</div>';
+        } else if (res.status === 'duplicate') {
+          resultEl.className = 'duplicate';
+          resultEl.innerHTML =
+            '<div class="big">⚠ BEREITS EINGECHECKT</div>' +
+            '<div class="name">' + esc(res.person) + '</div>' +
+            (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
+            '<div class="sub">Ticket ' + esc(res.ticket) +
+              ' · eingecheckt am ' + esc(res.time) + ' Uhr</div>';
+        } else if (res.status === 'invalid') {
+          resultEl.className = 'invalid';
+          resultEl.innerHTML = '<div class="big">✘ Ungültiger Code</div>';
+        } else {
+          resultEl.className = 'invalid';
+          resultEl.innerHTML = '<div class="big">Fehler</div>' +
+            '<div class="sub">' + esc(res.message || 'unbekannt') + '</div>';
+        }
+        if (res.sumTotal != null) {
+          statsEl.textContent =
+            'Eingecheckt gesamt: ' + res.sumChecked + ' von ' + res.sumTotal + ' Tickets';
+        }
+        if (liveMode) againBtn.style.display = 'inline-block';
+        if (navigator.vibrate) navigator.vibrate(res.status === 'ok' ? 100 : [80, 60, 80]);
+      }
+
+      function restart() {
+        againBtn.style.display = 'none';
+        resultEl.className = '';
+        resultEl.textContent = 'Bereit zum Scannen';
+        scanner.resume();
+      }
+
+      startLive();
+    </script>
+  </body>
+</html>
