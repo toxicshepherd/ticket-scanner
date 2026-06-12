@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ticket-Check-in</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+      body { font-family: sans-serif; margin: 0; text-align: center; background: #fafafa; }
+      h1 { font-size: 1.2em; padding: 12px 0 0; margin: 0; }
+      #reader { width: 100%; max-width: 500px; margin: 12px auto; }
+      #result { padding: 24px 16px; font-size: 1.3em; min-height: 60px; }
+      .ok        { background: #b7e1a1; }
+      .duplicate { background: #ffd966; }
+      .invalid   { background: #ea9999; }
+      button {
+        font-size: 1.1em; padding: 12px 24px; margin: 12px;
+        background: #4285f4; color: #fff; border: none; border-radius: 6px;
+      }
+      #setup { padding: 16px; }
+      #setup input { width: 90%; font-size: 1em; padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Ticket-Check-in</h1>
+
+    <!-- Einmalige Einrichtung: Apps-Script-Web-App-URL hinterlegen -->
+    <div id="setup" style="display:none">
+      <p>Apps-Script-Web-App-URL (endet auf /exec):</p>
+      <input id="apiInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+      <br /><button onclick="saveApi()">Speichern</button>
+    </div>
+
+    <div id="reader"></div>
+    <div id="result"></div>
+    <button id="again" style="display:none" onclick="restart()">Nächsten scannen</button>
+
+    <script>
+      const resultEl = document.getElementById('result');
+      const againBtn = document.getElementById('again');
+      const scanner = new Html5Qrcode('reader');
+
+      // API-URL aus ?api=...-Parameter oder localStorage; sonst Eingabemaske
+      let API_URL = new URLSearchParams(location.search).get('api')
+        || localStorage.getItem('apiUrl') || '';
+
+      function saveApi() {
+        const v = document.getElementById('apiInput').value.trim();
+        if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
+          alert('Bitte die vollständige /exec-URL einfügen.');
+          return;
+        }
+        API_URL = v;
+        localStorage.setItem('apiUrl', v);
+        document.getElementById('setup').style.display = 'none';
+        start();
+      }
+
+      function start() {
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: 220 },
+          onScan
+        ).then(() => resultEl.textContent = 'Bereit zum Scannen')
+         .catch(e => resultEl.textContent = 'Kamerafehler: ' + e);
+      }
+
+      function onScan(code) {
+        scanner.pause();
+        resultEl.className = '';
+        resultEl.textContent = 'Prüfe…';
+        // Content-Type text/plain vermeidet CORS-Preflight, den Apps Script
+        // nicht beantwortet; redirect:'follow' folgt der /exec-Weiterleitung.
+        fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: code,
+          redirect: 'follow'
+        })
+          .then(r => r.json())
+          .then(show)
+          .catch(e => show({ status: 'error', message: e.message }));
+      }
+
+      function show(res) {
+        if (res.status === 'ok') {
+          resultEl.className = 'ok';
+          resultEl.textContent = '✔ ' + res.person + ' eingecheckt';
+        } else if (res.status === 'duplicate') {
+          resultEl.className = 'duplicate';
+          resultEl.textContent = '⚠ BEREITS EINGECHECKT (' + res.time + '): ' + res.person;
+        } else if (res.status === 'invalid') {
+          resultEl.className = 'invalid';
+          resultEl.textContent = '✘ Ungültiger Code';
+        } else {
+          resultEl.className = 'invalid';
+          resultEl.textContent = 'Verbindungsfehler: ' + (res.message || 'unbekannt');
+        }
+        againBtn.style.display = 'inline-block';
+        if (navigator.vibrate) navigator.vibrate(res.status === 'ok' ? 100 : [80, 60, 80]);
+      }
+
+      function restart() {
+        againBtn.style.display = 'none';
+        resultEl.className = '';
+        resultEl.textContent = 'Bereit zum Scannen';
+        scanner.resume();
+      }
+
+      if (API_URL) {
+        start();
+      } else {
+        document.getElementById('setup').style.display = 'block';
+      }
+    </script>
+  </body>
+</html>
