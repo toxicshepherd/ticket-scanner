@@ -243,6 +243,12 @@ function showZipDialog() {
 
 // pdf-lib zum Zerlegen der PDFs nachladen (einmal pro Lauf)
 function loadPdfLib_() {
+  // Apps Script kennt kein setTimeout; pdf-lib braucht es intern.
+  // Synchroner Ersatz reicht hier völlig.
+  if (typeof globalThis.setTimeout === 'undefined') {
+    globalThis.setTimeout = function (fn) { fn(); return 0; };
+    globalThis.clearTimeout = function () {};
+  }
   const code = UrlFetchApp.fetch(
     'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js').getContentText();
   eval(code);
