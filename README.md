@@ -61,8 +61,9 @@ Zeigt nach jedem Scan groß und farbig:
 - **gelb:** „⚠ BEREITS EINGECHECKT" mit Person, Ticket-Nr. und ursprünglicher Einlasszeit
 - **rot:** „✘ Ungültiger Code"
 
-plus Vibration, Gesamt-Zähler („Eingecheckt gesamt: X von Y Tickets") und den
-Button „Nächsten scannen".
+plus Vibration und Gesamt-Zähler („Eingecheckt gesamt: X von Y Tickets").
+Nach jedem Scan geht es automatisch nach 3 Sekunden weiter; der
+„Weiter"-Button überspringt die Wartezeit.
 
 ## Einrichtung
 
