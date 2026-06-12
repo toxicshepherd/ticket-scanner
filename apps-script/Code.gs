@@ -19,16 +19,145 @@ const COLOR_PARTIAL = '#fff2cc'; // gelb: teilweise eingecheckt
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Check-in')
+    .addItem('Dashboard öffnen/aktualisieren', 'buildDashboard')
+    .addSeparator()
     .addItem('Teilnehmerlisten (XLSX) hochladen', 'showUploadDialog')
     .addItem('Ticket-Anzahl pro Person festlegen', 'setTicketCount')
     .addItem('QR-Codes mit Ticket-Anzahl abgleichen', 'syncAllTickets')
     .addItem('Karten-Vorlage (Slides) erzeugen', 'buildTicketTemplate')
     .addItem('Eintrittskarten (PDF) erzeugen', 'showTicketProgressDialog')
     .addItem('Letzte Karten-PDF herunterladen', 'showPdfDownloadDialog')
+    .addItem('Einzel-PDFs für Mailversand (ZIP) erzeugen', 'showZipDialog')
     .addSeparator()
     .addItem('Liste leeren (alle Personen + QR-Codes)', 'clearAllData')
     .addItem('Altes Teilnehmer-Blatt übernehmen (Migration)', 'migrateOldSheet')
     .addToUi();
+}
+
+/***** Dashboard: Eckdaten der Veranstaltung + Anleitung *****/
+
+const DASHBOARD_SHEET = 'Dashboard';
+const SETTING_COLOR = '#fff2cc'; // gelb: hier darf/soll editiert werden
+
+/**
+ * Liest die Eckdaten aus dem Dashboard. Sie ersetzen bei der
+ * Karten-Generierung die Platzhalter in der Slides-Vorlage:
+ * {{ART}}, {{ART_GROSS}}, {{JAHRGANG}}, {{DATUM}}, {{DATUM_LANG}},
+ * {{UHRZEIT}}, {{EINLASS}}, {{ORT}}
+ */
+function getEventSettings_() {
+  const out = { art: 'Abschlussfeier', jahrgang: '', datum: '',
+                datumLang: '', uhrzeit: '', einlass: '', ort: '' };
+  const sh = SpreadsheetApp.getActive().getSheetByName(DASHBOARD_SHEET);
+  if (!sh || sh.getLastRow() < 1) return out;
+
+  const map = {};
+  sh.getRange(1, 1, sh.getLastRow(), 2).getValues().forEach(r => {
+    if (r[0]) map[String(r[0]).trim()] = r[1];
+  });
+
+  if (map['Veranstaltung']) out.art = String(map['Veranstaltung']).trim();
+  if (map['Studienjahrgang']) out.jahrgang = String(map['Studienjahrgang']).trim();
+  if (map['Veranstaltungsort']) out.ort = String(map['Veranstaltungsort']).trim();
+  out.uhrzeit = timeStr_(map['Uhrzeit']);
+  out.einlass = timeStr_(map['Einlass ab']);
+
+  const d = map['Datum'];
+  if (d instanceof Date) {
+    out.datum = Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd.MM.yyyy');
+    const tage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch',
+                  'Donnerstag', 'Freitag', 'Samstag'];
+    const monate = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli',
+                    'August', 'September', 'Oktober', 'November', 'Dezember'];
+    out.datumLang = tage[d.getDay()] + ', ' + d.getDate() + '. ' +
+      monate[d.getMonth()] + ' ' + d.getFullYear();
+  } else if (d) {
+    out.datum = String(d).trim();
+    out.datumLang = String(d).trim();
+  }
+  return out;
+}
+
+function timeStr_(v) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
+  }
+  return v ? String(v).trim() : '';
+}
+
+/** Legt das Dashboard-Blatt an bzw. aktualisiert die Anleitung. */
+function buildDashboard() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName(DASHBOARD_SHEET);
+  const isNew = !sh;
+  if (!sh) sh = ss.insertSheet(DASHBOARD_SHEET, 0);
+
+  // Bisherige Eckdaten merken, damit "Aktualisieren" nichts überschreibt
+  const old = getEventSettings_();
+  sh.clear();
+
+  const rows = [
+    ['TICKET-CHECK-IN – DASHBOARD', '', ''],
+    ['', '', ''],
+    ['ECKDATEN DER VERANSTALTUNG', '', 'Gelbe Felder ausfüllen – die Werte landen auf den Ticket-PDFs.'],
+    ['Veranstaltung', old.art || 'Abschlussfeier', 'Abschlussfeier oder Vereidigung (Dropdown)'],
+    ['Studienjahrgang', old.jahrgang, 'z. B. 23/26 – erscheint als „Bachelor-Studienjahrgang 23/26"'],
+    ['Datum', old.datum, 'als Datum eintragen, z. B. 30.09.2026 – wird auf der Karte auch ausgeschrieben („Mittwoch, 30. September 2026")'],
+    ['Uhrzeit', old.uhrzeit, 'Beginn, z. B. 12:00'],
+    ['Einlass ab', old.einlass, 'z. B. 10:30'],
+    ['Veranstaltungsort', old.ort, 'z. B. Swiss Life Hall | Ferdinand-Wilhelm-Fricke-Weg 8 | 30169 Hannover'],
+    ['', '', ''],
+    ['SO FUNKTIONIERT ES (Menü „Check-in")', '', ''],
+    ['1. Teilnehmerlisten (XLSX) hochladen', '', 'Liest Spalten A Anrede, B Name, C Vorname, D StO, E Einstellungsjahr, H neue StGr ein. Mehrere Dateien möglich. Vorher ggf. „Liste leeren".'],
+    ['2. Ticket-Anzahl pro Person festlegen', '', 'Gilt für ALLE Personen; QR-Codes werden automatisch erzeugt und nummeriert (1/3, 2/3, …). Eingecheckte Tickets werden nie gelöscht.'],
+    ['3. Eckdaten oben ausfüllen', '', 'Veranstaltung, Jahrgang, Datum, Uhrzeit, Einlass, Ort – stehen anschließend auf jeder Karte.'],
+    ['4. Karten-Vorlage (Slides) erzeugen', '', 'Einmalig (und nach Design-Änderungen): erstellt die Slides-Vorlage in Kartengröße. Zum Feinjustieren öffnen – Link erscheint nach dem Erzeugen.'],
+    ['5. Eintrittskarten (PDF) erzeugen', '', 'Erzeugt pro Ticket Vorder- + Rückseite und lädt das Gesamt-PDF direkt im Browser herunter (Drive wird nicht gebraucht). Erneuter Download: „Letzte Karten-PDF herunterladen".'],
+    ['6. Einzel-PDFs für Mailversand (ZIP)', '', 'Eine PDF pro Ticket („Nachname, Vorname - Ticket 1von3.pdf") als ZIP. Entpacken und mit dem Outlook-Makro (outlook/SendTickets.bas im GitHub-Repo) verschicken – alle Tickets einer Person in einer Mail, Empfänger aus dem Outlook-Adressbuch.'],
+    ['7. Scannen am Einlass', '', 'Scanner-Seite: https://toxicshepherd.github.io/ticket-scanner/ – beim ersten Start die Web-App-URL (/exec) eintragen. Grün = eingecheckt, Gelb = bereits eingecheckt, Rot = ungültig. Nach 3 s geht es automatisch weiter.'],
+    ['', '', ''],
+    ['BLÄTTER', '', ''],
+    ['Personen', '', 'Eine Zeile pro Person. „Eingecheckt" zählt 1/2, 2/2 …; „Check-ins" sammelt Datum + Uhrzeit. Gelb = teilweise, Grün = vollständig eingecheckt.'],
+    ['QR-Codes', '', 'Eine Zeile pro Ticket mit QR-Code und Check-in-Zeitstempel. Nicht von Hand ändern – über das Menü pflegen.'],
+    ['', '', ''],
+    ['HINWEISE', '', ''],
+    ['Erweiterte Dienste', '', 'Im Script-Editor müssen „Drive API" und „Slides API" als Dienste aktiviert sein.'],
+    ['Web-App', '', 'Nach Code-Änderungen die Bereitstellung aktualisieren, sonst antwortet der Scanner mit der alten Version.'],
+    ['Liste leeren', '', 'Setzt Personen + QR-Codes komplett zurück (auch Check-ins!). Zeilen nie nur von Hand „leeren" – die versteckte ID-Spalte bleibt sonst gefüllt.']
+  ];
+
+  sh.getRange(1, 1, rows.length, 3).setValues(rows);
+
+  // Formatierung
+  sh.getRange('A1').setFontSize(14).setFontWeight('bold');
+  [3, 11, 19, 23].forEach(r =>
+    sh.getRange(r, 1).setFontWeight('bold').setFontSize(11));
+  sh.getRange(4, 1, 6, 1).setFontWeight('bold');
+  sh.getRange(12, 1, 7, 1).setFontWeight('bold');
+  sh.getRange(20, 1, 2, 1).setFontWeight('bold');
+  sh.getRange(24, 1, 3, 1).setFontWeight('bold');
+  sh.getRange(4, 2, 6, 1).setBackground(SETTING_COLOR)
+    .setHorizontalAlignment('left');
+  sh.getRange(1, 3, rows.length, 1).setWrap(true).setFontColor('#666666');
+
+  // Dropdown für die Veranstaltungsart
+  sh.getRange('B4').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(['Abschlussfeier', 'Vereidigung'], true)
+    .setAllowInvalid(false).build());
+  // Datum/Uhrzeiten als sinnvolle Formate
+  sh.getRange('B6').setNumberFormat('dd.mm.yyyy');
+  sh.getRange('B7:B8').setNumberFormat('@');
+
+  sh.setColumnWidth(1, 250);
+  sh.setColumnWidth(2, 280);
+  sh.setColumnWidth(3, 560);
+  sh.setFrozenRows(1);
+
+  ss.setActiveSheet(sh);
+  if (isNew) {
+    SpreadsheetApp.getUi().alert('Dashboard angelegt. Bitte die gelben ' +
+      'Eckdaten-Felder ausfüllen – sie landen auf den Ticket-PDFs.');
+  }
 }
 
 function showUploadDialog() {

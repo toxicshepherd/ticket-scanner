@@ -31,6 +31,12 @@ nicht löschen.
 
 ## Bedienung (Menü „Check-in" im Sheet)
 
+- **Dashboard öffnen/aktualisieren** — legt das Blatt „Dashboard" an: oben die
+  **Eckdaten der Veranstaltung** (Veranstaltungsart Abschlussfeier/Vereidigung
+  per Dropdown, Studienjahrgang, Datum, Uhrzeit, Einlass ab, Veranstaltungsort),
+  die bei der Generierung in die Ticket-PDFs übernommen werden, darunter eine
+  Schritt-für-Schritt-Anleitung für alles. Beim Aktualisieren bleiben die
+  eingetragenen Eckdaten erhalten.
 - **Teilnehmerlisten (XLSX) hochladen** — eine oder mehrere XLSX-Dateien
   auswählen. Erwartete Spalten: A Anrede, B Name, C Vorname, D StO,
   E Einstellungsjahr, F bisherige StGr, G Zuteilung, H neue StGr — übernommen
@@ -55,6 +61,9 @@ nicht löschen.
   dort, wo drive.google.com gesperrt ist) und liegt zusätzlich in Google Drive.
 - **Letzte Karten-PDF herunterladen** — lädt das zuletzt erzeugte PDF erneut
   direkt im Browser herunter, ohne Google Drive zu öffnen.
+- **Einzel-PDFs für Mailversand (ZIP) erzeugen** — eine PDF pro Ticket
+  (Vorder- + Rückseite) mit Dateinamen `Nachname, Vorname - Ticket 1von3.pdf`,
+  gepackt in ZIP-Teile (inkl. `Versandliste.csv`) zum Direkt-Download.
 - **Liste leeren (alle Personen + QR-Codes)** — setzt beide Blätter komplett
   zurück (inkl. Kopfzeilen), z. B. vor einem frischen Import. Wichtig: Zeilen
   von Hand nur zu leeren reicht nicht, weil die versteckte ID-Spalte gefüllt
@@ -62,6 +71,19 @@ nicht löschen.
 - **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
   alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
   Struktur; vorhandene Codes und Check-ins bleiben gültig.
+
+## Mailversand über Outlook
+
+1. Im Sheet **„Einzel-PDFs für Mailversand (ZIP) erzeugen"** ausführen und die
+   ZIP(s) in einen Ordner entpacken (z. B. `C:\Eintrittskarten`).
+2. Das Makro `outlook/SendTickets.bas` in Outlook einbinden
+   (Alt+F11 → Modul einfügen → Code hineinkopieren), oben `TICKET_FOLDER`
+   anpassen und `EintrittskartenVersenden` ausführen (Alt+F8).
+3. Das Makro hängt **alle Tickets einer Person in eine Mail**, löst den
+   Empfänger als „Vorname Nachname" über das Outlook-Adressbuch auf und legt
+   die Mails standardmäßig als **Entwürfe** an (`SEND_DIRECT = True` für
+   Direktversand). Nicht auflösbare Namen werden am Ende gemeldet und als
+   Entwurf ohne Empfänger abgelegt.
 
 ## Scanner-Seite
 

@@ -15,8 +15,12 @@
  *   die Karten werden gebündelt per batchUpdate erzeugt, sonst dauert
  *   die Generierung viele Minuten.
  *
- * Platzhalter in der Vorlage: {{QR}} (Rechteck, wird durch den QR-Code
- * ersetzt), {{NAME}}, {{TICKET}}, {{GRUPPE}}, {{ORT}}.
+ * Platzhalter in der Vorlage:
+ *   pro Ticket: {{QR}} (Rechteck, wird durch den QR-Code ersetzt),
+ *               {{NAME}}, {{TICKET}}, {{GRUPPE}}, {{ORT}} (Studienort)
+ *   Eckdaten vom Dashboard (für alle Karten gleich): {{ART}}, {{ART_GROSS}},
+ *               {{JAHRGANG}}, {{DATUM}}, {{DATUM_LANG}}, {{UHRZEIT}},
+ *               {{EINLASS}}, {{VERANSTALTUNGSORT}}
  */
 
 // Fertige Vorlage in Kartengröße — liegt im GitHub-Repo
@@ -119,53 +123,17 @@ function generateTicketPdf() {
   const CHUNK = 30; // Karten pro batchUpdate-Aufruf
 
   for (let c = 0; c < tickets.length; c += CHUNK) {
-    const requests = [];
-    tickets.slice(c, c + CHUNK).forEach((t, j) => {
-      const i = c + j;
-      const code = String(t[Q.CODE - 1]).trim();
-      const p = persons[t[Q.ID - 1]];
-      const name = (p ? p[P.ANREDE - 1] + ' ' : '') +
-        t[Q.VORNAME - 1] + ' ' + t[Q.NAME - 1];
-      const fId = 'tickf_' + i;
-      const bId = 'tickb_' + i;
-
-      // Vorder- und Rückseite duplizieren und ans Ende schieben
-      requests.push({ duplicateObject:
-        { objectId: frontId, objectIds: { [frontId]: fId } } });
-      const moveIds = [fId];
-      if (backId) {
-        requests.push({ duplicateObject:
-          { objectId: backId, objectIds: { [backId]: bId } } });
-        moveIds.push(bId);
-      }
-      slideCount += moveIds.length;
-      requests.push({ updateSlidesPosition:
-        { slideObjectIds: moveIds, insertionIndex: slideCount } });
-
-      // Platzhalter nur auf der neuen Vorderseite ersetzen
-      requests.push(textReplace_(fId, '{{NAME}}', name));
-      requests.push(textReplace_(fId, '{{TICKET}}',
-        'Ticket ' + ticketNo_(t[Q.TICKET - 1])));
-      requests.push(textReplace_(fId, '{{GRUPPE}}', p ? p[P.GRUPPE - 1] : ''));
-      requests.push(textReplace_(fId, '{{ORT}}', p ? p[P.ORT - 1] : ''));
-
-      // {{QR}}-Rechteck durch das QR-Bild ersetzen (behält Größe/Position)
-      requests.push({ replaceAllShapesWithImage: {
-        containsText: { text: '{{QR}}' },
-        imageUrl: 'https://quickchart.io/qr?size=600&margin=1&text=' +
-          encodeURIComponent(code),
-        imageReplaceMethod: 'CENTER_INSIDE',
-        pageObjectIds: [fId]
-      }});
-    });
-
-    Slides.Presentations.batchUpdate({ requests: requests }, presId);
+    const built = cardRequests_(tickets.slice(c, c + CHUNK), persons,
+      frontId, backId, slideCount, 't' + c + '_');
+    slideCount = built.slideCount;
+    Slides.Presentations.batchUpdate({ requests: built.requests }, presId);
     setProgress_(Math.min(c + CHUNK, tickets.length), tickets.length,
       'Karten werden erzeugt …');
   }
 
-  // Vorlagen-Folien aus dem Ergebnis entfernen
-  const cleanup = [{ deleteObject: { objectId: frontId } }];
+  // Eckdaten vom Dashboard einsetzen, Vorlagen-Folien entfernen
+  const cleanup = settingsReplaces_();
+  cleanup.push({ deleteObject: { objectId: frontId } });
   if (backId) cleanup.push({ deleteObject: { objectId: backId } });
   Slides.Presentations.batchUpdate({ requests: cleanup }, presId);
 
@@ -189,6 +157,200 @@ function textReplace_(slideId, find, repl) {
     replaceText: String(repl || ''),
     pageObjectIds: [slideId]
   }};
+}
+
+/**
+ * Ersetzt die Veranstaltungs-Platzhalter auf ALLEN Folien durch die
+ * Eckdaten vom Dashboard-Blatt (siehe getEventSettings_ in Code.gs).
+ */
+function settingsReplaces_() {
+  const s = getEventSettings_();
+  return [
+    ['{{ART_GROSS}}', s.art.toUpperCase()],
+    ['{{ART}}', s.art],
+    ['{{JAHRGANG}}', s.jahrgang],
+    ['{{DATUM_LANG}}', s.datumLang],
+    ['{{DATUM}}', s.datum],
+    ['{{UHRZEIT}}', s.uhrzeit],
+    ['{{EINLASS}}', s.einlass],
+    ['{{VERANSTALTUNGSORT}}', s.ort]
+  ].map(pair => ({ replaceAllText: {
+    containsText: { text: pair[0], matchCase: true },
+    replaceText: String(pair[1] || '')
+  }}));
+}
+
+/**
+ * Baut die batchUpdate-Requests für eine Gruppe Tickets:
+ * pro Ticket Vorder- (+ Rück-)Seite duplizieren, ans Ende schieben,
+ * Platzhalter ersetzen, QR-Bild einsetzen.
+ */
+function cardRequests_(tickets, persons, frontId, backId, startCount, prefix) {
+  const requests = [];
+  let slideCount = startCount;
+  tickets.forEach((t, j) => {
+    const code = String(t[Q.CODE - 1]).trim();
+    const p = persons[t[Q.ID - 1]];
+    const name = (p ? p[P.ANREDE - 1] + ' ' : '') +
+      t[Q.VORNAME - 1] + ' ' + t[Q.NAME - 1];
+    const fId = prefix + 'f' + j;
+    const bId = prefix + 'b' + j;
+
+    requests.push({ duplicateObject:
+      { objectId: frontId, objectIds: { [frontId]: fId } } });
+    const moveIds = [fId];
+    if (backId) {
+      requests.push({ duplicateObject:
+        { objectId: backId, objectIds: { [backId]: bId } } });
+      moveIds.push(bId);
+    }
+    slideCount += moveIds.length;
+    requests.push({ updateSlidesPosition:
+      { slideObjectIds: moveIds, insertionIndex: slideCount } });
+
+    requests.push(textReplace_(fId, '{{NAME}}', name));
+    requests.push(textReplace_(fId, '{{TICKET}}',
+      'Ticket ' + ticketNo_(t[Q.TICKET - 1])));
+    requests.push(textReplace_(fId, '{{GRUPPE}}', p ? p[P.GRUPPE - 1] : ''));
+    requests.push(textReplace_(fId, '{{ORT}}', p ? p[P.ORT - 1] : ''));
+
+    requests.push({ replaceAllShapesWithImage: {
+      containsText: { text: '{{QR}}' },
+      imageUrl: 'https://quickchart.io/qr?size=600&margin=1&text=' +
+        encodeURIComponent(code),
+      imageReplaceMethod: 'CENTER_INSIDE',
+      pageObjectIds: [fId]
+    }});
+  });
+  return { requests: requests, slideCount: slideCount };
+}
+
+/***** Einzel-PDFs pro Ticket für den Mailversand über Outlook *****
+ *
+ * Erzeugt pro Ticket eine eigene PDF (Vorder- + Rückseite) mit dem
+ * Dateinamen "Nachname, Vorname - Ticket 1von3.pdf" und packt alles
+ * in ZIP-Dateien (max. ~35 MB pro Teil) zum Direkt-Download.
+ * Der Versand läuft dann über das Outlook-Makro (outlook/SendTickets.bas),
+ * das alle Tickets einer Person in eine Mail hängt.
+ */
+
+function showZipDialog() {
+  CacheService.getScriptCache().remove('TICKET_PROGRESS');
+  const html = HtmlService.createHtmlOutputFromFile('ZipProgress')
+    .setWidth(440).setHeight(260);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Einzel-PDFs für Mailversand');
+}
+
+// pdf-lib zum Zerlegen der PDFs nachladen (einmal pro Lauf)
+function loadPdfLib_() {
+  const code = UrlFetchApp.fetch(
+    'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js').getContentText();
+  eval(code);
+  return globalThis.PDFLib || PDFLib;
+}
+
+/** Wird aus dem ZIP-Dialog per google.script.run aufgerufen. */
+async function generateTicketZips() {
+  const templateId = templateId_();
+  if (!templateId) {
+    throw new Error('Bitte zuerst über das Menü "Karten-Vorlage (Slides) ' +
+      'erzeugen" die Vorlage anlegen.');
+  }
+
+  const qs = qrSheet_();
+  const ps = personenSheet_();
+  const lastQ = qs.getLastRow();
+  if (lastQ < 2) throw new Error('Keine Tickets im Blatt "' + QR_SHEET + '" gefunden.');
+  const qData = qs.getRange(2, 1, lastQ - 1, Q_HEADER.length).getValues();
+
+  const persons = {};
+  const lastP = ps.getLastRow();
+  if (lastP >= 2) {
+    ps.getRange(2, 1, lastP - 1, P_HEADER.length).getValues().forEach(p => {
+      persons[p[P.ID - 1]] = p;
+    });
+  }
+
+  const tickets = qData.filter(t => String(t[Q.CODE - 1]).trim());
+  setProgress_(0, tickets.length, 'Einzel-PDFs werden erzeugt …');
+  const PDFLib = loadPdfLib_();
+
+  const SEG = 25;             // Tickets pro Zwischen-PDF (hält Speicher klein)
+  const MAX_ZIP = 35 * 1024 * 1024; // Blob-Limit von Apps Script ist 50 MB
+  const parts = [];
+  const csvRows = ['Nachname;Vorname;Empfänger;Ticket;Datei'];
+  let bucket = [], bucketSize = 0, partNo = 1;
+
+  const flush = () => {
+    if (!bucket.length) return;
+    const zip = Utilities.zip(bucket, 'Eintrittskarten_Teil' + partNo + '.zip');
+    const f = DriveApp.createFile(zip);
+    parts.push({ fileId: f.getId(), name: f.getName() });
+    partNo++;
+    bucket = [];
+    bucketSize = 0;
+  };
+
+  for (let s = 0; s < tickets.length; s += SEG) {
+    const seg = tickets.slice(s, s + SEG);
+
+    // Mini-Deck für dieses Segment bauen und als PDF exportieren
+    const copy = DriveApp.getFileById(templateId).makeCopy('tmp Karten ' + s);
+    const presId = copy.getId();
+    const pres = Slides.Presentations.get(presId);
+    const frontId = pres.slides[0].objectId;
+    const backId = pres.slides.length > 1 ? pres.slides[1].objectId : null;
+
+    const built = cardRequests_(seg, persons, frontId, backId,
+      pres.slides.length, 'z' + s + '_');
+    const cleanup = settingsReplaces_();
+    cleanup.push({ deleteObject: { objectId: frontId } });
+    if (backId) cleanup.push({ deleteObject: { objectId: backId } });
+    Slides.Presentations.batchUpdate(
+      { requests: built.requests.concat(cleanup) }, presId);
+
+    const segPdf = copy.getAs('application/pdf');
+    copy.setTrashed(true);
+
+    // Segment-PDF in Einzel-PDFs (2 Seiten pro Ticket) zerlegen
+    const pagesPerTicket = backId ? 2 : 1;
+    const src = await PDFLib.PDFDocument.load(new Uint8Array(segPdf.getBytes()));
+    for (let k = 0; k < seg.length; k++) {
+      const doc = await PDFLib.PDFDocument.create();
+      const idx = [];
+      for (let pg = 0; pg < pagesPerTicket; pg++) idx.push(k * pagesPerTicket + pg);
+      const copied = await doc.copyPages(src, idx);
+      copied.forEach(page => doc.addPage(page));
+      const bytes = await doc.save();
+
+      const t = seg[k];
+      const ticketLabel = String(ticketNo_(t[Q.TICKET - 1])).replace('/', 'von');
+      const fname = t[Q.NAME - 1] + ', ' + t[Q.VORNAME - 1] +
+        ' - Ticket ' + ticketLabel + '.pdf';
+      csvRows.push([t[Q.NAME - 1], t[Q.VORNAME - 1],
+        t[Q.VORNAME - 1] + ' ' + t[Q.NAME - 1], ticketLabel, fname].join(';'));
+
+      if (bucketSize + bytes.length > MAX_ZIP) flush();
+      bucket.push(Utilities.newBlob(bytes, 'application/pdf', fname));
+      bucketSize += bytes.length;
+    }
+    setProgress_(Math.min(s + SEG, tickets.length), tickets.length,
+      'Einzel-PDFs werden erzeugt …');
+  }
+
+  // Versandliste mit in den letzten Teil packen
+  bucket.push(Utilities.newBlob(csvRows.join('\r\n'), 'text/csv', 'Versandliste.csv'));
+  setProgress_(tickets.length, tickets.length, 'ZIP wird gepackt …');
+  flush();
+
+  PropertiesService.getDocumentProperties()
+    .setProperty('LAST_ZIP_IDS', JSON.stringify(parts));
+  return { count: tickets.length, parts: parts };
+}
+
+function getLastZips() {
+  const v = PropertiesService.getDocumentProperties().getProperty('LAST_ZIP_IDS');
+  return v ? JSON.parse(v) : null;
 }
 
 /***** Direkt-Download des PDFs aus dem Sheet (ohne Google Drive) *****/
