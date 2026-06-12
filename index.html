@@ -6,31 +6,106 @@
     <title>Ticket-Check-in</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-      body { font-family: sans-serif; margin: 0; text-align: center; background: #fafafa; }
-      h1 { font-size: 1.2em; padding: 12px 0 0; margin: 0; }
-      #reader { width: 100%; max-width: 500px; margin: 12px auto; }
-      #result { padding: 20px 16px; min-height: 110px; }
-      #result .big  { font-size: 1.5em; font-weight: bold; }
-      #result .name { font-size: 1.3em; margin-top: 6px; }
-      #result .sub  { font-size: 1em; margin-top: 4px; opacity: 0.85; }
-      .ok        { background: #b7e1a1; }
-      .duplicate { background: #ffd966; }
-      .invalid   { background: #ea9999; }
-      #stats { padding: 8px; font-size: 0.95em; color: #555; }
-      button {
-        font-size: 1.1em; padding: 12px 24px; margin: 12px;
-        background: #4285f4; color: #fff; border: none; border-radius: 6px;
+      * { box-sizing: border-box; }
+      body {
+        font-family: sans-serif; margin: 0; background: #fafafa;
+        height: 100vh; display: flex; flex-direction: column;
       }
-      #setup { padding: 16px; }
-      #setup input { width: 90%; font-size: 1em; padding: 8px; }
-      .linkbtn {
-        background: none; color: #888; font-size: 0.85em;
-        text-decoration: underline; padding: 8px; margin: 16px 0 8px;
+      header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 8px 16px; background: #1f6cb4; color: #fff;
+      }
+      header h1 { font-size: 1.1em; margin: 0; flex: 1; }
+      header button {
+        background: none; border: 1px solid rgba(255,255,255,.5); color: #fff;
+        border-radius: 6px; padding: 4px 10px; font-size: .85em;
+      }
+
+      main {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: 3fr 2fr; gap: 12px;
+        padding: 12px;
+      }
+      /* Hochformat / schmale Bildschirme: untereinander */
+      @media (max-aspect-ratio: 1/1), (max-width: 760px) {
+        body { height: auto; }
+        main { grid-template-columns: 1fr; }
+      }
+
+      #left { min-height: 0; display: flex; }
+      #reader {
+        flex: 1; background: #000; border-radius: 8px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #reader video { width: 100% !important; height: 100% !important;
+                      object-fit: cover; }
+
+      #right { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+
+      #result {
+        padding: 14px; border-radius: 8px; min-height: 120px;
+        background: #eee; text-align: center;
+      }
+      #result .big  { font-size: 1.4em; font-weight: bold; }
+      #result .name { font-size: 1.25em; margin-top: 6px; }
+      #result .sub  { font-size: .95em; margin-top: 4px; opacity: .85; }
+      .ok        { background: #b7e1a1 !important; }
+      .duplicate { background: #ffd966 !important; }
+      .invalid   { background: #ea9999 !important; }
+
+      #again {
+        font-size: 1.05em; padding: 10px; border: none; border-radius: 8px;
+        background: #4285f4; color: #fff; width: 100%;
+      }
+
+      /* Statistiken */
+      #stats { background: #fff; border-radius: 8px; padding: 10px 14px; }
+      #progressOuter {
+        background: #e4e4e4; border-radius: 6px; height: 18px;
+        overflow: hidden; margin-top: 6px;
+      }
+      #progressInner {
+        background: #34a853; height: 100%; width: 0%;
+        transition: width .4s;
+      }
+      #progressText { font-size: .9em; color: #444; }
+      #counters {
+        display: flex; gap: 14px; margin-top: 8px; font-size: .9em; color: #444;
+      }
+      #counters b { font-size: 1.1em; }
+
+      /* Verlauf */
+      #historyBox {
+        flex: 1; min-height: 0; background: #fff; border-radius: 8px;
+        padding: 10px 14px; display: flex; flex-direction: column;
+      }
+      #historyBox h2 { margin: 0 0 6px; font-size: .95em; color: #666; }
+      #history {
+        flex: 1; overflow-y: auto; margin: 0; padding: 0; list-style: none;
+      }
+      #history li {
+        padding: 6px 8px; margin-bottom: 5px; border-radius: 6px;
+        font-size: .92em; border-left: 6px solid #ccc;
+        background: #f4f4f4; display: flex; gap: 8px; align-items: baseline;
+      }
+      #history li .t { color: #777; font-size: .85em; white-space: nowrap; }
+      #history li.ok        { border-left-color: #5fa845; }
+      #history li.duplicate { border-left-color: #e0a800; }
+      #history li.invalid   { border-left-color: #cc4125; }
+
+      #setup { padding: 24px; text-align: center; }
+      #setup input { width: 90%; max-width: 520px; font-size: 1em; padding: 8px; }
+      #setup button {
+        font-size: 1em; padding: 10px 22px; margin: 12px;
+        background: #4285f4; color: #fff; border: none; border-radius: 6px;
       }
     </style>
   </head>
   <body>
-    <h1>Ticket-Check-in</h1>
+    <header>
+      <h1>🎫 Ticket-Check-in</h1>
+      <button onclick="showSetup()">⚙ API-URL</button>
+    </header>
 
     <!-- Einmalige Einrichtung: Apps-Script-Web-App-URL hinterlegen -->
     <div id="setup" style="display:none">
@@ -39,16 +114,34 @@
       <br /><button onclick="saveApi()">Speichern</button>
     </div>
 
-    <div id="reader"></div>
-    <div id="result"></div>
-    <button id="again" style="display:none" onclick="restart()">Nächsten scannen</button>
-    <div id="stats"></div>
-    <button id="changeApi" class="linkbtn" onclick="showSetup()">⚙ API-URL ändern</button>
+    <main>
+      <section id="left"><div id="reader"></div></section>
+      <section id="right">
+        <div id="result">Kamera startet…</div>
+        <button id="again" style="display:none" onclick="restart()">Weiter</button>
+
+        <div id="stats">
+          <div id="progressText">Eingecheckt: – / –</div>
+          <div id="progressOuter"><div id="progressInner"></div></div>
+          <div id="counters">
+            <span>✔ OK: <b id="cntOk">0</b></span>
+            <span>⚠ Doppelt: <b id="cntDup">0</b></span>
+            <span>✘ Ungültig: <b id="cntInv">0</b></span>
+          </div>
+        </div>
+
+        <div id="historyBox">
+          <h2>Verlauf (letzte Scans)</h2>
+          <ol id="history"></ol>
+        </div>
+      </section>
+    </main>
 
     <script>
       const resultEl = document.getElementById('result');
-      const statsEl = document.getElementById('stats');
       const againBtn = document.getElementById('again');
+      const historyEl = document.getElementById('history');
+      const cnt = { ok: 0, duplicate: 0, invalid: 0 };
       const scanner = new Html5Qrcode('reader');
 
       // API-URL aus ?api=...-Parameter oder localStorage; sonst Eingabemaske
@@ -75,9 +168,10 @@
       }
 
       function start() {
+        // Kein qrbox-Parameter: das gesamte Kamerabild wird ausgewertet
         scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: 220 },
+          { fps: 10 },
           onScan
         ).then(() => resultEl.textContent = 'Bereit zum Scannen')
          .catch(e => resultEl.textContent = 'Kamerafehler: ' + e);
@@ -119,15 +213,43 @@
         return d.innerHTML;
       }
 
+      function nowStr() {
+        return new Date().toLocaleTimeString('de-DE',
+          { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
+      function addHistory(cls, html) {
+        const li = document.createElement('li');
+        li.className = cls;
+        li.innerHTML = '<span class="t">' + nowStr() + '</span><span>' + html + '</span>';
+        historyEl.prepend(li);
+        while (historyEl.children.length > 50) historyEl.lastChild.remove();
+      }
+
+      function updateStats(res) {
+        if (res.sumTotal != null) {
+          document.getElementById('progressText').textContent =
+            'Eingecheckt: ' + res.sumChecked + ' von ' + res.sumTotal + ' Tickets';
+          document.getElementById('progressInner').style.width =
+            Math.round(100 * res.sumChecked / Math.max(1, res.sumTotal)) + '%';
+        }
+        document.getElementById('cntOk').textContent = cnt.ok;
+        document.getElementById('cntDup').textContent = cnt.duplicate;
+        document.getElementById('cntInv').textContent = cnt.invalid;
+      }
+
       function show(res) {
         if (res.status === 'ok') {
+          cnt.ok++;
           resultEl.className = 'ok';
           resultEl.innerHTML =
             '<div class="big">✔ Eingecheckt (Ticket ' + esc(res.ticket) + ')</div>' +
             '<div class="name">' + esc(res.person) + '</div>' +
             (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
             '<div class="sub">' + esc(res.time) + ' Uhr</div>';
+          addHistory('ok', '✔ ' + esc(res.person) + ' · Ticket ' + esc(res.ticket));
         } else if (res.status === 'duplicate') {
+          cnt.duplicate++;
           resultEl.className = 'duplicate';
           resultEl.innerHTML =
             '<div class="big">⚠ BEREITS EINGECHECKT</div>' +
@@ -135,22 +257,23 @@
             (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
             '<div class="sub">Ticket ' + esc(res.ticket) +
               ' · eingecheckt am ' + esc(res.time) + ' Uhr</div>';
+          addHistory('duplicate', '⚠ ' + esc(res.person) +
+            ' · Ticket ' + esc(res.ticket) + ' · war schon ' + esc(res.time));
         } else if (res.status === 'invalid') {
+          cnt.invalid++;
           resultEl.className = 'invalid';
           resultEl.innerHTML = '<div class="big">✘ Ungültiger Code</div>';
+          addHistory('invalid', '✘ Ungültiger Code');
         } else {
           resultEl.className = 'invalid';
           resultEl.innerHTML = '<div class="big">Verbindungsfehler</div>' +
             '<div class="sub">' + esc(res.message || 'unbekannt') + '</div>';
         }
-        if (res.sumTotal != null) {
-          statsEl.textContent =
-            'Eingecheckt gesamt: ' + res.sumChecked + ' von ' + res.sumTotal + ' Tickets';
-        }
+        updateStats(res);
         if (navigator.vibrate) navigator.vibrate(res.status === 'ok' ? 100 : [80, 60, 80]);
 
         // Nach 3 Sekunden automatisch weiter; Button erlaubt Sofort-Weiter
-        againBtn.style.display = 'inline-block';
+        againBtn.style.display = 'block';
         let countdown = 3;
         againBtn.textContent = 'Weiter (' + countdown + ')';
         resumeTimer = setInterval(() => {
