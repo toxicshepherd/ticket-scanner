@@ -82,11 +82,13 @@ function lastContentRow_(sheet, col) {
   return 1;
 }
 
-/** Setzt ein Blatt komplett zurück: alle Datenzeilen weg, Kopfzeile neu. */
+/** Setzt ein Blatt komplett zurück: Inhalte und Farben weg, Kopfzeile neu. */
 function resetSheet_(sheet, header) {
-  if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
-  sheet.getRange(1, 1, 1, sheet.getMaxColumns()).clearContent();
+  // clear() statt deleteRows(): Sheets verweigert das Löschen aller
+  // nicht fixierten Zeilen, wenn die Kopfzeile fixiert ist
+  sheet.clear();
   sheet.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
 }
 
 function clearAllData() {
