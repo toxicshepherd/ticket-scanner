@@ -287,8 +287,8 @@
       function restart() {
         clearInterval(resumeTimer);
         againBtn.style.display = 'none';
-        resultEl.className = '';
-        resultEl.textContent = 'Bereit zum Scannen';
+        // Letztes Ergebnis bewusst stehen lassen — es bleibt groß sichtbar,
+        // bis der nächste Scan es ersetzt
         scanner.resume();
       }
 
