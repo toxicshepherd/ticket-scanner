@@ -5,9 +5,9 @@ const QR_SHEET = 'QR-Codes';
 
 // Blatt "Personen": eine Zeile pro Person
 const P_HEADER = ['Anrede', 'Name', 'Vorname', 'Studiengruppe', 'Studienort',
-                  'Tickets', 'Eingecheckt', 'Check-ins', 'ID'];
+                  'Einstellungsjahr', 'Tickets', 'Eingecheckt', 'Check-ins', 'ID'];
 const P = { ANREDE: 1, NAME: 2, VORNAME: 3, GRUPPE: 4, ORT: 5,
-            TICKETS: 6, STATUS: 7, CHECKINS: 8, ID: 9 };
+            JAHR: 6, TICKETS: 7, STATUS: 8, CHECKINS: 9, ID: 10 };
 
 // Blatt "QR-Codes": eine Zeile pro Ticket
 const Q_HEADER = ['ID', 'Name', 'Vorname', 'Ticket', 'QR-Code', 'QR-Bild', 'Check-in'];
@@ -15,12 +15,11 @@ const Q = { ID: 1, NAME: 2, VORNAME: 3, TICKET: 4, CODE: 5, BILD: 6, CHECKIN: 7 
 
 const COLOR_FULL = '#d9ead3';    // grün: alle Tickets eingecheckt
 const COLOR_PARTIAL = '#fff2cc'; // gelb: teilweise eingecheckt
-const COLOR_REVIEW = '#fce5cd';  // orange: Namens-Trennung beim Import unsicher
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Check-in')
-    .addItem('Teilnehmer-PDFs hochladen', 'showUploadDialog')
+    .addItem('Teilnehmerlisten (XLSX) hochladen', 'showUploadDialog')
     .addItem('Ticket-Anzahl pro Person festlegen', 'setTicketCount')
     .addItem('QR-Codes mit Ticket-Anzahl abgleichen', 'syncAllTickets')
     .addItem('Karten-Vorlage (Slides) erzeugen', 'buildTicketTemplate')
@@ -34,7 +33,7 @@ function onOpen() {
 function showUploadDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Upload')
     .setWidth(420).setHeight(260);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Teilnehmer-PDFs hochladen');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Teilnehmerlisten (XLSX) hochladen');
 }
 
 /***** Blätter *****/
@@ -90,31 +89,42 @@ function qrImageFormula(qrString) {
     qrString.replace(/"/g, '""') + '"))';
 }
 
-/***** PDF-Import (wird pro Datei aus dem Upload-Dialog aufgerufen) *****/
+/***** XLSX-Import (wird pro Datei aus dem Upload-Dialog aufgerufen) *****/
 
-function processPdf(base64Data, fileName) {
+/**
+ * Erwartete Spalten der XLSX-Datei:
+ *   A Anrede | B Name | C Vorname | D StO | E Einstellungsjahr |
+ *   F bisherige StGr | G Zuteilung | H neue StGr
+ * Übernommen werden A, B, C, D, E und H (F/G werden ignoriert);
+ * H (neue StGr) landet als Studiengruppe, D (StO) als Studienort.
+ */
+function processXlsx(base64Data, fileName) {
   const blob = Utilities.newBlob(
-    Utilities.base64Decode(base64Data), 'application/pdf', fileName);
+    Utilities.base64Decode(base64Data),
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    fileName);
 
-  // PDF nach Drive hochladen und in ein Google Doc konvertieren
+  // XLSX nach Drive hochladen und in ein Google Sheet konvertieren
   const tempFile = Drive.Files.create(
-    { name: fileName, mimeType: 'application/vnd.google-apps.document' },
-    blob,
-    { ocrLanguage: 'de' }
-  );
+    { name: fileName, mimeType: 'application/vnd.google-apps.spreadsheet' },
+    blob);
 
-  const doc = DocumentApp.openById(tempFile.id);
-  const body = doc.getBody();
-
-  // 1. Versuch: echte Tabellen im Doc auslesen (zuverlässigster Weg)
-  let rows = extractFromTables(body).map(cells => [cells, false]);
-
-  // 2. Fallback: Fließtext parsen
-  if (rows.length === 0) {
-    rows = extractFromText(body.getText());
+  let rows;
+  try {
+    const src = SpreadsheetApp.openById(tempFile.id).getSheets()[0];
+    rows = src.getDataRange().getValues()
+      .filter(r => /^(Herr|Frau)$/.test(String(r[0]).trim())) // Kopf-/Leerzeilen weg
+      .map(r => [
+        String(r[0]).trim(),        // Anrede
+        String(r[1]).trim(),        // Name
+        String(r[2]).trim(),        // Vorname
+        String(r[7] || '').trim(),  // neue StGr -> Studiengruppe
+        String(r[3] || '').trim(),  // StO       -> Studienort
+        String(r[4] || '').trim()   // Einstellungsjahr
+      ]);
+  } finally {
+    Drive.Files.remove(tempFile.id);
   }
-
-  Drive.Files.remove(tempFile.id);
 
   if (rows.length === 0) throw new Error(fileName + ': keine Datenzeilen gefunden.');
 
@@ -127,7 +137,7 @@ function processPdf(base64Data, fileName) {
   const n = defaultTicketCount_();
   const pValues = [];
   const tickets = [];
-  rows.forEach(([cells]) => {
+  rows.forEach(cells => {
     const id = Utilities.getUuid();
     pValues.push(cells.concat([n, '0/' + n, '', id]));
     for (let k = 1; k <= n; k++) {
@@ -141,56 +151,7 @@ function processPdf(base64Data, fileName) {
   qs.getRange(qStart, 1, tickets.length, Q_HEADER.length).setValues(tickets);
   qs.setRowHeights(qStart, tickets.length, 60); // Platz für die QR-Bilder
 
-  // Unsichere Namens-Trennungen orange markieren
-  let flagged = 0;
-  rows.forEach(([cells, unsicher], i) => {
-    if (unsicher) {
-      ps.getRange(startRow + i, 1, 1, P_HEADER.length).setBackground(COLOR_REVIEW);
-      flagged++;
-    }
-  });
-
-  return fileName + ': ' + pValues.length + ' Personen importiert' +
-    (flagged ? ' (' + flagged + ' orange markierte bitte prüfen)' : '') + '.';
-}
-
-function extractFromTables(body) {
-  const rows = [];
-  const tables = body.getTables();
-  for (let t = 0; t < tables.length; t++) {
-    const table = tables[t];
-    for (let r = 0; r < table.getNumRows(); r++) {
-      const row = table.getRow(r);
-      const cells = [];
-      for (let c = 0; c < row.getNumCells(); c++) {
-        // Zeilenumbrüche in Zellen ("Freiherr von\nSenden") glätten
-        cells.push(row.getCell(c).getText().replace(/\s+/g, ' ').trim());
-      }
-      if (cells.length < 5) continue;
-      if (cells[0] === 'Anrede') continue;            // Kopfzeile überspringen
-      if (!/^(Herr|Frau)$/.test(cells[0])) continue;  // Leer-/Müllzeilen
-      rows.push(cells.slice(0, 5));
-    }
-  }
-  return rows;
-}
-
-function extractFromText(text) {
-  const rows = [];
-  // Findet jeden Datensatz einzeln, auch wenn mehrere in einem Absatz stehen:
-  // Anrede ... Namen ... Studiengruppe (XX/XX/XXX) Studienort
-  const re = /(Herr|Frau)\s+(.+?)\s+(\d{2}\/\d{2}\/\d+)\s+(\S+)/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const tokens = m[2].replace(/\s+/g, ' ').trim().split(' ');
-    // Spaltengrenze Name|Vorname ist im Fließtext nicht erkennbar.
-    // Heuristik: letztes Wort = Vorname, Rest = Name. Bei mehr als zwei
-    // Wörtern ist das unsicher -> Zeile wird zur Prüfung markiert.
-    const vorname = tokens.pop();
-    const name = tokens.join(' ');
-    rows.push([[m[1], name, vorname, m[3], m[4]], tokens.length > 1]);
-  }
-  return rows;
+  return fileName + ': ' + pValues.length + ' Personen importiert.';
 }
 
 /***** Ticket-Anzahl pro Person *****/
@@ -468,7 +429,7 @@ function migrateOldSheet() {
     const code = String(r[5]).trim() || Utilities.getUuid();
     const checkin = r[7];
     if (checkin) greenIdx.push(pValues.length);
-    pValues.push([r[0], r[1], r[2], r[3], r[4], 1,
+    pValues.push([r[0], r[1], r[2], r[3], r[4], '', 1,
                   checkin ? '1/1' : '0/1', checkin ? fmt_(checkin) : '', id]);
     tickets.push([id, r[1], r[2], '1/1', code, qrImageFormula(code), checkin || '']);
   });

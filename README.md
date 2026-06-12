@@ -1,7 +1,7 @@
 # Ticket-Scanner
 
-Check-in-System für Veranstaltungen: Teilnehmer werden per PDF in ein Google Sheet
-importiert, bekommen pro Person eine einstellbare Anzahl QR-Code-Tickets, und am
+Check-in-System für Veranstaltungen: Teilnehmer werden per XLSX-Liste in ein
+Google Sheet importiert, bekommen pro Person eine einstellbare Anzahl QR-Code-Tickets, und am
 Einlass werden die Codes mit der Handykamera über diese Scanner-Seite gescannt.
 
 **Scanner (GitHub Pages):** https://toxicshepherd.github.io/ticket-scanner/
@@ -11,8 +11,8 @@ Einlass werden die Codes mit der Handykamera über diese Scanner-Seite gescannt.
 | Teil | Ort |
 |---|---|
 | `index.html` | Scanner-Seite, gehostet über GitHub Pages |
-| `apps-script/Code.gs` | Apps Script (an das Google Sheet gebunden): PDF-Import, Ticket-Verwaltung, Check-in-Endpunkt |
-| `apps-script/Upload.html` | Dialog zum Hochladen mehrerer Teilnehmer-PDFs |
+| `apps-script/Code.gs` | Apps Script (an das Google Sheet gebunden): XLSX-Import, Ticket-Verwaltung, Check-in-Endpunkt |
+| `apps-script/Upload.html` | Dialog zum Hochladen mehrerer Teilnehmerlisten (XLSX) |
 | `apps-script/Scanner.html` | Fallback-Scanner direkt in der Web-App (nur Foto-Modus, da Apps Script die Live-Kamera blockiert) |
 
 ### Tabellenstruktur
@@ -20,10 +20,9 @@ Einlass werden die Codes mit der Handykamera über diese Scanner-Seite gescannt.
 Das Script legt zwei Blätter automatisch an:
 
 - **Personen** — eine Zeile pro Person: Anrede, Name, Vorname, Studiengruppe,
-  Studienort, **Tickets** (Anzahl), **Eingecheckt** (z. B. `1/2`, `2/2`),
-  **Check-ins** (Datum + Uhrzeit jedes Scans). Farben: gelb = teilweise
-  eingecheckt, grün = vollständig eingecheckt, orange = Namens-Trennung beim
-  PDF-Import unsicher (bitte prüfen).
+  Studienort, Einstellungsjahr, **Tickets** (Anzahl), **Eingecheckt**
+  (z. B. `1/2`, `2/2`), **Check-ins** (Datum + Uhrzeit jedes Scans).
+  Farben: gelb = teilweise eingecheckt, grün = vollständig eingecheckt.
 - **QR-Codes** — eine Zeile pro Ticket: Name, Vorname, Ticket-Nr. (z. B. `2/2`),
   QR-String, QR-Bild, Check-in-Zeitstempel. Eingecheckte Tickets werden grün.
 
@@ -32,8 +31,12 @@ nicht löschen.
 
 ## Bedienung (Menü „Check-in" im Sheet)
 
-- **Teilnehmer-PDFs hochladen** — eine oder mehrere PDFs auswählen; jede Person
-  bekommt automatisch die zuletzt festgelegte Ticket-Anzahl (Standard: 1).
+- **Teilnehmerlisten (XLSX) hochladen** — eine oder mehrere XLSX-Dateien
+  auswählen. Erwartete Spalten: A Anrede, B Name, C Vorname, D StO,
+  E Einstellungsjahr, F bisherige StGr, G Zuteilung, H neue StGr — übernommen
+  werden A–E und H (H „neue StGr" als Studiengruppe, D „StO" als Studienort).
+  Jede Person bekommt automatisch die zuletzt festgelegte Ticket-Anzahl
+  (Standard: 1).
 - **Ticket-Anzahl pro Person festlegen** — gilt immer für **alle** Personen auf
   der Liste (auch für spätere Importe); QR-Codes werden automatisch
   erzeugt/entfernt und neu nummeriert (`1/3`, `2/3`, `3/3`). Bereits
@@ -72,7 +75,7 @@ Nach jedem Scan geht es automatisch nach 3 Sekunden weiter; der
 
 1. **Apps Script:** Inhalte aus `apps-script/` in den an das Sheet gebundenen
    Script-Editor kopieren (`Code.gs`, plus HTML-Dateien `Upload` und `Scanner`).
-   Der erweiterte Dienst **Drive API** muss aktiviert sein (für den PDF-Import).
+   Der erweiterte Dienst **Drive API** muss aktiviert sein (für den XLSX-Import).
 2. **Web-App bereitstellen:** Bereitstellen → Neue Bereitstellung → Web-App,
    Zugriff „Jeder". Die `/exec`-URL kopieren. Nach Code-Änderungen die
    Bereitstellung aktualisieren, sonst läuft die alte Version weiter.
