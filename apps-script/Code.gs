@@ -21,7 +21,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Check-in')
     .addItem('Teilnehmer-PDFs hochladen', 'showUploadDialog')
-    .addItem('Ticket-Anzahl für markierte Personen festlegen', 'setTicketCount')
+    .addItem('Ticket-Anzahl pro Person festlegen', 'setTicketCount')
     .addItem('QR-Codes mit Ticket-Anzahl abgleichen', 'syncAllTickets')
     .addSeparator()
     .addItem('Altes Teilnehmer-Blatt übernehmen (Migration)', 'migrateOldSheet')
@@ -105,15 +105,18 @@ function processPdf(base64Data, fileName) {
   const qs = qrSheet_();
   const startRow = ps.getLastRow() + 1;
 
-  // Jede importierte Person startet mit 1 Ticket; mehr Tickets später über
-  // das Menü "Ticket-Anzahl für markierte Personen festlegen".
+  // Jede importierte Person bekommt die über das Menü festgelegte
+  // Ticket-Anzahl (Standard: 1)
+  const n = defaultTicketCount_();
   const pValues = [];
   const tickets = [];
   rows.forEach(([cells]) => {
     const id = Utilities.getUuid();
-    pValues.push(cells.concat([1, '0/1', '', id]));
-    const code = buildQrString.apply(null, cells);
-    tickets.push([id, cells[1], cells[2], '1/1', code, qrImageFormula(code), '']);
+    pValues.push(cells.concat([n, '0/' + n, '', id]));
+    for (let k = 1; k <= n; k++) {
+      const code = buildQrString.apply(null, cells);
+      tickets.push([id, cells[1], cells[2], k + '/' + n, code, qrImageFormula(code), '']);
+    }
   });
 
   ps.getRange(startRow, 1, pValues.length, P_HEADER.length).setValues(pValues);
@@ -175,16 +178,14 @@ function extractFromText(text) {
 
 /***** Ticket-Anzahl pro Person *****/
 
+/**
+ * Legt die Ticket-Anzahl für ALLE Personen auf der Liste fest
+ * und gleicht die QR-Codes direkt ab.
+ */
 function setTicketCount() {
   const ui = SpreadsheetApp.getUi();
-  const sel = SpreadsheetApp.getActiveRange();
-  if (!sel || sel.getSheet().getName() !== PERSONEN_SHEET || sel.getRow() < 2) {
-    ui.alert('Bitte zuerst im Blatt "' + PERSONEN_SHEET +
-      '" die Zeilen der betreffenden Personen markieren.');
-    return;
-  }
   const resp = ui.prompt('Ticket-Anzahl festlegen',
-    'Wie viele Tickets sollen die markierten Personen erhalten?',
+    'Wie viele Tickets soll jede Person erhalten?',
     ui.ButtonSet.OK_CANCEL);
   if (resp.getSelectedButton() !== ui.Button.OK) return;
   const n = parseInt(resp.getResponseText(), 10);
@@ -193,10 +194,22 @@ function setTicketCount() {
     return;
   }
 
+  // Merken, damit auch später importierte Personen diese Anzahl bekommen
+  PropertiesService.getDocumentProperties()
+    .setProperty('TICKET_COUNT', String(n));
+
   const ps = personenSheet_();
-  ps.getRange(sel.getRow(), P.TICKETS, sel.getNumRows(), 1)
-    .setValues(Array.from({ length: sel.getNumRows() }, () => [n]));
+  const lastRow = ps.getLastRow();
+  if (lastRow < 2) { ui.alert('Keine Personen vorhanden.'); return; }
+  ps.getRange(2, P.TICKETS, lastRow - 1, 1)
+    .setValues(Array.from({ length: lastRow - 1 }, () => [n]));
   ui.alert(syncTickets_());
+}
+
+function defaultTicketCount_() {
+  const v = parseInt(
+    PropertiesService.getDocumentProperties().getProperty('TICKET_COUNT'), 10);
+  return v >= 1 && v <= 20 ? v : 1;
 }
 
 function syncAllTickets() {

@@ -33,12 +33,12 @@ nicht löschen.
 ## Bedienung (Menü „Check-in" im Sheet)
 
 - **Teilnehmer-PDFs hochladen** — eine oder mehrere PDFs auswählen; jede Person
-  startet mit 1 Ticket.
-- **Ticket-Anzahl für markierte Personen festlegen** — Zeilen im Blatt „Personen"
-  markieren, Anzahl eingeben; QR-Codes werden automatisch erzeugt/entfernt und
-  neu nummeriert (`1/3`, `2/3`, `3/3`). Bereits eingecheckte Tickets werden nie
-  gelöscht. Alternativ die Spalte „Tickets" direkt bearbeiten und danach
-  **QR-Codes mit Ticket-Anzahl abgleichen** ausführen.
+  bekommt automatisch die zuletzt festgelegte Ticket-Anzahl (Standard: 1).
+- **Ticket-Anzahl pro Person festlegen** — gilt immer für **alle** Personen auf
+  der Liste (auch für spätere Importe); QR-Codes werden automatisch
+  erzeugt/entfernt und neu nummeriert (`1/3`, `2/3`, `3/3`). Bereits
+  eingecheckte Tickets werden nie gelöscht. Nach einer Migration einmal
+  ausführen, damit auch die übernommenen Personen die richtige Anzahl erhalten.
 - **Altes Teilnehmer-Blatt übernehmen (Migration)** — überführt ein Blatt im
   alten Ein-Blatt-Layout (QR in Spalte F, Check-in in Spalte H) in die neue
   Struktur; vorhandene Codes und Check-ins bleiben gültig.
