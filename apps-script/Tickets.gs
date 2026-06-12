@@ -136,7 +136,7 @@ function generateTicketPdf() {
 
     const slide = template.duplicate();
     slide.replaceAllText('{{NAME}}', name);
-    slide.replaceAllText('{{TICKET}}', 'Ticket ' + t[Q.TICKET - 1]);
+    slide.replaceAllText('{{TICKET}}', 'Ticket ' + ticketNo_(t[Q.TICKET - 1]));
     slide.replaceAllText('{{GRUPPE}}', p ? String(p[P.GRUPPE - 1]) : '');
     slide.replaceAllText('{{ORT}}', p ? String(p[P.ORT - 1]) : '');
 

@@ -53,11 +53,25 @@ function getSheet_(name, header) {
 function personenSheet_() {
   const sheet = getSheet_(PERSONEN_SHEET, P_HEADER);
   if (!sheet.isColumnHiddenByUser(P.ID)) sheet.hideColumns(P.ID);
+  // Zähler "1/2" als Klartext erzwingen, sonst macht Sheets ein Datum daraus
+  sheet.getRange(1, P.STATUS, sheet.getMaxRows()).setNumberFormat('@');
   return sheet;
 }
 
 function qrSheet_() {
-  return getSheet_(QR_SHEET, Q_HEADER);
+  const sheet = getSheet_(QR_SHEET, Q_HEADER);
+  // Ticket-Nr. "1/2" als Klartext erzwingen, sonst macht Sheets ein Datum daraus
+  sheet.getRange(1, Q.TICKET, sheet.getMaxRows()).setNumberFormat('@');
+  return sheet;
+}
+
+/**
+ * Liefert die Ticket-Nr. als Text. Wurde "3/3" von Sheets bereits als
+ * Datum (3. März) gespeichert, wird daraus wieder "3/3" rekonstruiert.
+ */
+function ticketNo_(v) {
+  if (v instanceof Date) return (v.getMonth() + 1) + '/' + v.getDate();
+  return String(v);
 }
 
 /***** QR-Codes *****/
@@ -374,7 +388,7 @@ function checkIn(code) {
     if (ticket[Q.CHECKIN - 1]) {
       return Object.assign({
         status: 'duplicate', person: label, info: info,
-        ticket: String(ticket[Q.TICKET - 1]),
+        ticket: ticketNo_(ticket[Q.TICKET - 1]),
         time: fmt_(ticket[Q.CHECKIN - 1])
       }, stats_(qData));
     }
