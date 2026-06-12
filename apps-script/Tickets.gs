@@ -73,21 +73,39 @@ function buildTicketTemplate() {
     'https://docs.google.com/presentation/d/' + created.presentationId + '/edit');
 }
 
+/** Öffnet den Dialog mit Fortschrittsbalken, der die Generierung startet. */
+function showTicketProgressDialog() {
+  CacheService.getScriptCache().remove('TICKET_PROGRESS');
+  const html = HtmlService.createHtmlOutputFromFile('TicketProgress')
+    .setWidth(420).setHeight(200);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Eintrittskarten erzeugen');
+}
+
+function setProgress_(done, total, label) {
+  CacheService.getScriptCache().put('TICKET_PROGRESS',
+    JSON.stringify({ done: done, total: total, label: label }), 600);
+}
+
+function getTicketProgress() {
+  const v = CacheService.getScriptCache().get('TICKET_PROGRESS');
+  return v ? JSON.parse(v) : null;
+}
+
+/** Wird aus dem Fortschritts-Dialog per google.script.run aufgerufen. */
 function generateTicketPdf() {
-  const ui = SpreadsheetApp.getUi();
   const templateId = templateId_();
   if (!templateId) {
-    ui.alert('Bitte zuerst über das Menü "Karten-Vorlage (Slides) erzeugen" ' +
-      'die Vorlage anlegen (oder deren ID in den Dokument-Eigenschaften ' +
-      'unter TICKET_TEMPLATE_ID hinterlegen).');
-    return;
+    throw new Error('Bitte zuerst über das Menü "Karten-Vorlage (Slides) ' +
+      'erzeugen" die Vorlage anlegen.');
   }
 
   const qs = qrSheet_();
   const ps = personenSheet_();
   const lastQ = qs.getLastRow();
-  if (lastQ < 2) { ui.alert('Keine Tickets im Blatt "' + QR_SHEET + '" gefunden.'); return; }
+  if (lastQ < 2) throw new Error('Keine Tickets im Blatt "' + QR_SHEET + '" gefunden.');
   const qData = qs.getRange(2, 1, lastQ - 1, Q_HEADER.length).getValues();
+
+  setProgress_(0, qData.length, 'Vorlage wird kopiert …');
 
   // Personendaten (Anrede, Gruppe, Ort) über die ID dazuholen
   const persons = {};
@@ -104,7 +122,12 @@ function generateTicketPdf() {
   const deck = SlidesApp.openById(copy.getId());
   const template = deck.getSlides()[0];
 
+  let done = 0;
   qData.forEach(t => {
+    done++;
+    if (done % 3 === 0 || done === qData.length) {
+      setProgress_(done, qData.length, 'Karten werden erzeugt …');
+    }
     const code = String(t[Q.CODE - 1]).trim();
     if (!code) return;
     const p = persons[t[Q.ID - 1]];
@@ -129,12 +152,12 @@ function generateTicketPdf() {
   });
 
   template.remove(); // Vorlagen-Folie aus dem Ergebnis entfernen
+  setProgress_(qData.length, qData.length, 'PDF wird exportiert …');
   deck.saveAndClose();
 
   const pdf = DriveApp.createFile(
     copy.getAs('application/pdf').setName(copy.getName() + '.pdf'));
   copy.setTrashed(true); // Slides-Zwischendatei aufräumen
 
-  ui.alert(qData.length + ' Eintrittskarten erzeugt.\n\nPDF in Google Drive:\n' +
-    pdf.getUrl());
+  return { count: qData.length, url: pdf.getUrl() };
 }
