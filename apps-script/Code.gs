@@ -25,6 +25,7 @@ function onOpen() {
     .addItem('QR-Codes mit Ticket-Anzahl abgleichen', 'syncAllTickets')
     .addItem('Karten-Vorlage (Slides) erzeugen', 'buildTicketTemplate')
     .addItem('Eintrittskarten (PDF) erzeugen', 'showTicketProgressDialog')
+    .addItem('Letzte Karten-PDF herunterladen', 'showPdfDownloadDialog')
     .addSeparator()
     .addItem('Altes Teilnehmer-Blatt übernehmen (Migration)', 'migrateOldSheet')
     .addToUi();

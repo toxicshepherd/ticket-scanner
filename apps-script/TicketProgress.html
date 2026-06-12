@@ -14,15 +14,47 @@
       const count = document.getElementById('count');
       const result = document.getElementById('result');
 
-      // Generierung starten; Ergebnis-Link anzeigen, wenn fertig
+      // Lädt das PDF stückweise vom Script und stößt den Browser-Download
+      // an — ohne Aufruf von drive.google.com (an manchen PCs gesperrt)
+      function downloadPdf(fileId, fallbackName) {
+        const parts = [];
+        function next(i) {
+          google.script.run
+            .withSuccessHandler(c => {
+              parts.push(Uint8Array.from(atob(c.data), ch => ch.charCodeAt(0)));
+              if (c.more) {
+                count.textContent = 'Lade PDF … Teil ' + (i + 2);
+                next(i + 1);
+              } else {
+                const name = c.name || fallbackName || 'Eintrittskarten.pdf';
+                const url = URL.createObjectURL(
+                  new Blob(parts, { type: 'application/pdf' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                count.textContent = 'Download gestartet: ' + name;
+                result.innerHTML = 'Falls nichts passiert: <a href="' + url +
+                  '" download="' + name + '">hier klicken</a>';
+              }
+            })
+            .withFailureHandler(e => {
+              count.textContent = 'Fehler beim Laden: ' + e.message;
+            })
+            .getPdfChunk(fileId, i);
+        }
+        count.textContent = 'Lade PDF … Teil 1';
+        next(0);
+      }
+
+      // Generierung starten; danach direkt den Download anstoßen
       google.script.run
         .withSuccessHandler(res => {
           clearInterval(timer);
           bar.style.width = '100%';
           label.textContent = 'Fertig: ' + res.count + ' Eintrittskarten erzeugt.';
-          count.textContent = '';
-          result.innerHTML =
-            '<a href="' + res.url + '" target="_blank">PDF in Google Drive öffnen</a>';
+          downloadPdf(res.fileId, res.name);
         })
         .withFailureHandler(err => {
           clearInterval(timer);

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <body style="font-family: sans-serif; margin: 16px;">
+    <p id="dlStatus">Lade PDF …</p>
+    <p id="dlResult"></p>
+    <script>
+      // Lädt das PDF stückweise vom Script und stößt den Browser-Download
+      // an — ohne Aufruf von drive.google.com
+      function downloadPdf(fileId, fallbackName) {
+        const status = document.getElementById('dlStatus');
+        const result = document.getElementById('dlResult');
+        const parts = [];
+
+        function next(i) {
+          google.script.run
+            .withSuccessHandler(c => {
+              parts.push(Uint8Array.from(atob(c.data), ch => ch.charCodeAt(0)));
+              if (c.more) {
+                status.textContent = 'Lade PDF … Teil ' + (i + 2);
+                next(i + 1);
+              } else {
+                const name = c.name || fallbackName || 'Eintrittskarten.pdf';
+                const url = URL.createObjectURL(
+                  new Blob(parts, { type: 'application/pdf' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                status.textContent = 'Download gestartet: ' + name;
+                result.innerHTML = 'Falls nichts passiert: <a href="' + url +
+                  '" download="' + name + '">hier klicken</a>';
+              }
+            })
+            .withFailureHandler(e => {
+              status.textContent = 'Fehler beim Laden: ' + e.message;
+            })
+            .getPdfChunk(fileId, i);
+        }
+        status.textContent = 'Lade PDF … Teil 1';
+        next(0);
+      }
+
+      google.script.run
+        .withSuccessHandler(info => {
+          if (!info) {
+            document.getElementById('dlStatus').textContent =
+              'Kein PDF gefunden – bitte zuerst "Eintrittskarten (PDF) erzeugen" ausführen.';
+            return;
+          }
+          downloadPdf(info.fileId, info.name);
+        })
+        .getLastPdf();
+    </script>
+  </body>
+</html>
