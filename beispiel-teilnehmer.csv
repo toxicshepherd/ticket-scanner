@@ -1,0 +1,11 @@
+Anrede;Vorname;Nachname;Email;Block;Platz
+Herr;Max;Müller;max.mueller@example.de;A;12
+Frau;Eva;Schäfer;eva.schaefer@example.de;A;13
+Herr;Jörg;Köhler;joerg.koehler@example.de;B;1
+Frau;Anna;Weiß;anna.weiss@example.de;B;2
+Herr;Sebastian;Groß;s.gross@example.de;C;5
+Frau;Müge;Öztürk;m.oeztuerk@example.de;C;6
+Dr.;Friedrich;Lindemann;f.lindemann@example.de;A;14
+Frau;Sophie;Bäcker;sophie.baecker@example.de;B;3
+Herr;Lukas;Hofmann;lukas.hofmann@example.de;C;7
+Frau;Christina;Vogt;christina.vogt@example.de;A;15

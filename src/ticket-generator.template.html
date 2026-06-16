@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket-Generator (offline)</title>
+<style>
+  :root{
+    --akzent:#1f6cb4; --akzent-dunkel:#16518a;
+    --ok:#1f8a4c; --warn:#b8860b; --fehler:#c0392b;
+    --rahmen:#d7dde3; --bg:#f4f6f8; --text:#1d2733;
+  }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);line-height:1.45}
+  header{background:var(--akzent);color:#fff;padding:14px 20px}
+  header h1{margin:0;font-size:1.25rem}
+  header p{margin:4px 0 0;opacity:.9;font-size:.85rem}
+  main{max-width:980px;margin:0 auto;padding:18px}
+  section{background:#fff;border:1px solid var(--rahmen);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  section > h2{margin:0 0 12px;font-size:1.05rem;display:flex;align-items:center;gap:8px}
+  .nr{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--akzent);color:#fff;font-size:.85rem;flex:none}
+  label{display:block;font-size:.82rem;font-weight:600;margin:0 0 3px;color:#445}
+  input[type=text],select{width:100%;padding:8px 10px;border:1px solid var(--rahmen);border-radius:7px;font-size:.95rem;background:#fff;color:var(--text)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  .feld{margin-bottom:2px}
+  .hinweis{font-size:.8rem;color:#667;margin:6px 0 0}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:10px 16px;background:var(--akzent);color:#fff;font-weight:600}
+  button:hover{background:var(--akzent-dunkel)}
+  button:disabled{background:#aab4bd;cursor:not-allowed}
+  button.sekundaer{background:#e9eef3;color:var(--text);border:1px solid var(--rahmen)}
+  button.sekundaer:hover{background:#dde4ea}
+  .filerow{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  input[type=file]{font-size:.9rem}
+  table{border-collapse:collapse;width:100%;font-size:.82rem;margin-top:10px}
+  th,td{border:1px solid var(--rahmen);padding:5px 7px;text-align:left;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+  th{background:#eef2f6}
+  .status{padding:8px 12px;border-radius:7px;font-size:.9rem;margin-top:10px}
+  .status.ok{background:#e7f6ed;color:#155e34;border:1px solid #b6e0c4}
+  .status.fehler{background:#fdecea;color:#a02617;border:1px solid #f3c0b8}
+  .status.info{background:#eaf2fb;color:#16518a;border:1px solid #c3d9f1}
+  .bar{height:22px;background:#e9eef3;border-radius:11px;overflow:hidden;margin-top:10px;display:none}
+  .bar > div{height:100%;width:0;background:var(--akzent);transition:width .15s;text-align:center;color:#fff;font-size:.75rem;line-height:22px}
+  .mapping{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .vorschau-wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  /* ===== VORLAGE (HTML/CSS-Vorschau der Karte) — Design hier anpassen,
+       parallel zur Funktion zeichneTicket() in core-generator.js ===== */
+  .karte{width:230px;aspect-ratio:105/148;border:1px solid var(--rahmen);border-radius:8px;overflow:hidden;
+         background:#fff;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.08);font-size:11px}
+  .karte .kopf{background:var(--akzent);color:#fff;text-align:center;padding:8px 6px}
+  .karte .kopf .anlass{font-weight:700;font-size:12px}
+  .karte .kopf .meta{font-size:9px;opacity:.95;margin-top:2px}
+  .karte .label{text-align:center;letter-spacing:2px;color:#789;font-size:8px;margin-top:8px}
+  .karte .name{text-align:center;font-weight:700;font-size:14px;margin:4px 8px}
+  .karte .bp{text-align:center;color:#556;font-size:10px}
+  .karte .qr{flex:1;display:flex;align-items:center;justify-content:center}
+  .karte .qr img{width:62%;image-rendering:pixelated}
+  .karte .fuss{text-align:center;color:#99a;font-size:7px;padding:0 6px 6px}
+  .small{font-size:.8rem;color:#667}
+  code{background:#eef2f6;padding:1px 5px;border-radius:4px;font-size:.85em}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ticket-Generator</h1>
+  <p>Vollständig offline · erzeugt personalisierte Ticket-PDFs, <code>tokens.json</code> und Versand-Manifest</p>
+</header>
+
+<main>
+  <section>
+    <h2><span class="nr">1</span> Veranstaltung</h2>
+    <p class="hinweis">Vorbelegt aus den Konstanten am Anfang des Skripts. Hier bei Bedarf für diesen Lauf überschreiben.</p>
+    <div class="grid">
+      <div class="feld"><label>Anlass</label><input type="text" id="f_anlass"></div>
+      <div class="feld"><label>Datum</label><input type="text" id="f_datum"></div>
+      <div class="feld"><label>Uhrzeit</label><input type="text" id="f_uhrzeit"></div>
+      <div class="feld"><label>Ort</label><input type="text" id="f_ort"></div>
+      <div class="feld"><label>Fußzeile</label><input type="text" id="f_fuss"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="nr">2</span> Teilnehmerliste (CSV)</h2>
+    <div class="filerow">
+      <input type="file" id="csvfile" accept=".csv,text/csv,text/plain">
+      <span class="small">Trennzeichen <code>;</code> oder <code>,</code> und UTF-8 werden automatisch erkannt.</span>
+    </div>
+    <div id="csvstatus"></div>
+    <div id="mappingbox" style="display:none">
+      <label style="margin-top:14px">Spaltenzuordnung (automatisch erkannt — bei Bedarf korrigieren)</label>
+      <div class="mapping" id="mapping"></div>
+      <label style="margin-top:12px"><input type="checkbox" id="hatHeader" style="width:auto;margin-right:6px">Erste Zeile ist eine Überschrift</label>
+      <div id="preview"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="nr">3</span> Optionen</h2>
+    <div class="grid">
+      <div class="feld">
+        <label>Dateiname-Muster</label>
+        <input type="text" id="f_muster">
+        <p class="hinweis">Platzhalter: <code>{nachname} {vorname} {anrede} {email} {block} {platz} {index}</code></p>
+      </div>
+      <div class="feld">
+        <label>QR-Fehlerkorrektur</label>
+        <select id="f_ec">
+          <option value="L">L — niedrig (kleinster Code)</option>
+          <option value="M" selected>M — Standard (empfohlen)</option>
+          <option value="Q">Q — hoch</option>
+          <option value="H">H — sehr hoch (robust)</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="nr">4</span> Tickets erzeugen</h2>
+    <button id="go" disabled>Tickets erzeugen &amp; ZIP herunterladen</button>
+    <button id="vorschauBtn" class="sekundaer" disabled>Vorschau aktualisieren</button>
+    <div class="bar" id="bar"><div id="barfill">0%</div></div>
+    <div id="genstatus"></div>
+    <div class="vorschau-wrap" style="margin-top:14px">
+      <div>
+        <div class="small" style="margin-bottom:6px">Vorschau (erste Person der Liste):</div>
+        <!-- VORLAGE: HTML-Karte -->
+        <div class="karte" id="karte">
+          <div class="kopf"><div class="anlass" id="k_anlass">Anlass</div><div class="meta" id="k_meta">Datum · Ort</div></div>
+          <div class="label">EINTRITTSKARTE</div>
+          <div class="name" id="k_name">Vorname Nachname</div>
+          <div class="bp" id="k_bp">Block — · Platz —</div>
+          <div class="qr"><img id="k_qr" alt="QR"></div>
+          <div class="fuss" id="k_fuss"></div>
+        </div>
+      </div>
+      <div class="small" style="max-width:380px">
+        <p><strong>Im ZIP enthalten:</strong></p>
+        <ul>
+          <li>Ein A6-PDF je Person (Name + scanbarer QR)</li>
+          <li><code>tokens.json</code> — gültige Tickets (bleibt lokal, nur für den Scanner)</li>
+          <li><code>versand_manifest.csv</code> — <code>Email;Dateiname</code> für den Outlook-Versand</li>
+        </ul>
+        <p>Der QR enthält <strong>ausschließlich</strong> ein zufälliges Token — keine personenbezogenen Daten.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ===== Bibliotheken (lokal eingebettet, keine externen Referenzen) ===== -->
+<!--INLINE:qrcode-->
+<!--INLINE:jspdf-->
+<!--INLINE:jszip-->
+<!--INLINE:core-generator-->
+
+<script>
+/* =====================================================================
+ * KONFIGURATION — Standardwerte (oben in der Oberfläche überschreibbar)
+ * ===================================================================== */
+var KONSTANTEN = {
+  anlass: 'Tag der offenen Tür',
+  datum: '16.06.2026',
+  uhrzeit: '10:00 Uhr',
+  ort: 'Musterbehörde, Musterstraße 1, 12345 Musterstadt',
+  fusszeile: 'Eintritt nur mit gültigem Lichtbildausweis.',
+  qrFehlerkorrektur: 'M',
+  dateinameMuster: 'Ticket_{nachname}_{vorname}_{email}',
+  // Farbe des Kopfbandes (RGB)
+  farbe: { r: 31, g: 108, b: 180 }
+};
+/* ===================================================================== */
+
+(function () {
+  'use strict';
+  var jsPDF = window.jspdf.jsPDF;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var parsed = null;      // { delim, rows }
+  var mapping = null;     // { anrede, vorname, ... -> Spaltenindex }
+  var records = [];       // aktuelle Datensätze gemäß Mapping
+
+  // Felder vorbelegen
+  $('f_anlass').value = KONSTANTEN.anlass;
+  $('f_datum').value = KONSTANTEN.datum;
+  $('f_uhrzeit').value = KONSTANTEN.uhrzeit;
+  $('f_ort').value = KONSTANTEN.ort;
+  $('f_fuss').value = KONSTANTEN.fusszeile;
+  $('f_muster').value = KONSTANTEN.dateinameMuster;
+  $('f_ec').value = KONSTANTEN.qrFehlerkorrektur;
+
+  function cfgAusForm() {
+    return {
+      anlass: $('f_anlass').value.trim(),
+      datum: $('f_datum').value.trim(),
+      uhrzeit: $('f_uhrzeit').value.trim(),
+      ort: $('f_ort').value.trim(),
+      fusszeile: $('f_fuss').value.trim(),
+      qrFehlerkorrektur: $('f_ec').value,
+      dateinameMuster: $('f_muster').value.trim() || KONSTANTEN.dateinameMuster,
+      farbe: KONSTANTEN.farbe
+    };
+  }
+
+  function meldung(el, text, typ) {
+    el.innerHTML = '';
+    if (!text) return;
+    var d = document.createElement('div');
+    d.className = 'status ' + (typ || 'info');
+    d.textContent = text;
+    el.appendChild(d);
+  }
+
+  /* ---------- CSV einlesen ---------- */
+  $('csvfile').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onerror = function () { meldung($('csvstatus'), 'Die Datei konnte nicht gelesen werden.', 'fehler'); };
+    reader.onload = function () {
+      try {
+        verarbeiteCSV(String(reader.result));
+      } catch (err) {
+        meldung($('csvstatus'), 'Fehler beim Einlesen der CSV: ' + err.message, 'fehler');
+        $('mappingbox').style.display = 'none';
+        $('go').disabled = true; $('vorschauBtn').disabled = true;
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  function verarbeiteCSV(text) {
+    parsed = TG.parseCSV(text);
+    if (!parsed.rows.length) throw new Error('Die Datei enthält keine Daten.');
+    var header = TG.hatUeberschrift(parsed.rows);
+    $('hatHeader').checked = header;
+    mapping = TG.autoMapping(parsed.rows[0]);
+    baueMappingUI();
+    aktualisiere();
+    $('mappingbox').style.display = '';
+    meldung($('csvstatus'),
+      parsed.rows.length + ' Zeile(n) gelesen · Trennzeichen "' + (parsed.delim === '\t' ? 'Tab' : parsed.delim) + '"',
+      'ok');
+  }
+
+  function spaltenOptionen() {
+    // Liste der verfügbaren Spalten (Überschrift falls vorhanden, sonst "Spalte n")
+    var header = parsed.rows[0] || [];
+    var hatH = $('hatHeader').checked;
+    var anzahl = Math.max.apply(null, parsed.rows.map(function (r) { return r.length; }));
+    var opts = [];
+    for (var i = 0; i < anzahl; i++) {
+      var name = hatH && header[i] != null && String(header[i]).trim() !== '' ? String(header[i]).trim() : 'Spalte ' + (i + 1);
+      opts.push({ idx: i, name: name });
+    }
+    return opts;
+  }
+
+  var FELD_LABELS = { anrede: 'Anrede', vorname: 'Vorname', nachname: 'Nachname', email: 'Email', block: 'Block', platz: 'Platz' };
+
+  function baueMappingUI() {
+    var box = $('mapping');
+    box.innerHTML = '';
+    var opts = spaltenOptionen();
+    TG.FELDER.forEach(function (f) {
+      var wrap = document.createElement('div');
+      var lab = document.createElement('label'); lab.textContent = FELD_LABELS[f]; wrap.appendChild(lab);
+      var sel = document.createElement('select'); sel.dataset.feld = f;
+      var none = document.createElement('option'); none.value = '-1'; none.textContent = '(nicht zugeordnet)'; sel.appendChild(none);
+      opts.forEach(function (o) {
+        var op = document.createElement('option'); op.value = String(o.idx); op.textContent = o.name; sel.appendChild(op);
+      });
+      sel.value = String(mapping[f]);
+      sel.addEventListener('change', function () {
+        mapping[f] = parseInt(sel.value, 10);
+        aktualisiere();
+      });
+      wrap.appendChild(sel);
+      box.appendChild(wrap);
+    });
+  }
+
+  $('hatHeader').addEventListener('change', function () { baueMappingUI(); aktualisiere(); });
+
+  function aktualisiere() {
+    records = TG.datensaetzeAusRows(parsed.rows, mapping, $('hatHeader').checked);
+    zeigeVorschauTabelle();
+    var anzahl = records.length;
+    $('go').disabled = anzahl === 0;
+    $('vorschauBtn').disabled = anzahl === 0;
+    aktualisiereKarte();
+  }
+
+  function zeigeVorschauTabelle() {
+    var box = $('preview');
+    box.innerHTML = '';
+    if (!records.length) { box.innerHTML = '<p class="hinweis">Keine Datensätze.</p>'; return; }
+    var info = document.createElement('p'); info.className = 'hinweis';
+    info.textContent = records.length + ' Person(en) erkannt. Vorschau der ersten Zeilen:';
+    box.appendChild(info);
+    var t = document.createElement('table');
+    var thead = document.createElement('tr');
+    TG.FELDER.forEach(function (f) { var th = document.createElement('th'); th.textContent = FELD_LABELS[f]; thead.appendChild(th); });
+    t.appendChild(thead);
+    records.slice(0, 6).forEach(function (r) {
+      var tr = document.createElement('tr');
+      TG.FELDER.forEach(function (f) { var td = document.createElement('td'); td.textContent = r[f]; tr.appendChild(td); });
+      t.appendChild(tr);
+    });
+    box.appendChild(t);
+    // Warnung bei fehlenden E-Mails
+    var ohneMail = records.filter(function (r) { return !r.email; }).length;
+    if (ohneMail) {
+      var w = document.createElement('p'); w.className = 'hinweis';
+      w.style.color = '#a02617';
+      w.textContent = 'Hinweis: ' + ohneMail + ' Person(en) ohne E-Mail — diese Zeilen im Versand-Manifest bleiben leer.';
+      box.appendChild(w);
+    }
+  }
+
+  /* ---------- Karten-Vorschau ---------- */
+  function aktualisiereKarte() {
+    var cfg = cfgAusForm();
+    var r = records[0] || { anrede: '', vorname: 'Vorname', nachname: 'Nachname', block: '', platz: '' };
+    $('k_anlass').textContent = cfg.anlass || 'Anlass';
+    $('k_meta').textContent = [cfg.datum, cfg.uhrzeit, cfg.ort].filter(Boolean).join(' · ');
+    $('k_name').textContent = [r.anrede, r.vorname, r.nachname].filter(Boolean).join(' ') || '—';
+    var bp = [];
+    if (r.block) bp.push('Block ' + r.block);
+    if (r.platz) bp.push('Platz ' + r.platz);
+    $('k_bp').textContent = bp.join(' · ');
+    $('k_fuss').textContent = cfg.fusszeile || '';
+    // QR-Vorschau aus einem Beispiel-Token (rein optisch; im PDF steht das echte Token)
+    try {
+      var qr = qrcode(0, cfg.qrFehlerkorrektur); qr.addData(records[0] ? 'VORSCHAU' : 'BEISPIEL'); qr.make();
+      $('k_qr').src = qr.createDataURL(4, 8);
+    } catch (e) { /* ignore */ }
+  }
+  ['f_anlass', 'f_datum', 'f_uhrzeit', 'f_ort', 'f_fuss', 'f_ec'].forEach(function (id) {
+    $(id).addEventListener('input', aktualisiereKarte);
+    $(id).addEventListener('change', aktualisiereKarte);
+  });
+  $('vorschauBtn').addEventListener('click', aktualisiereKarte);
+  aktualisiereKarte();
+
+  /* ---------- Erzeugen ---------- */
+  $('go').addEventListener('click', function () {
+    if (!records.length) return;
+    var cfg = cfgAusForm();
+    if (!cfg.anlass) { meldung($('genstatus'), 'Bitte einen Anlass angeben.', 'fehler'); return; }
+
+    $('go').disabled = true; $('vorschauBtn').disabled = true; $('csvfile').disabled = true;
+    var bar = $('bar'), fill = $('barfill');
+    bar.style.display = 'block'; fill.style.width = '0%'; fill.textContent = '0%';
+    meldung($('genstatus'), 'Erzeuge ' + records.length + ' Ticket(s) …', 'info');
+
+    var onProgress = function (fertig, gesamt) {
+      var pct = Math.round(fertig / gesamt * 100);
+      fill.style.width = pct + '%';
+      fill.textContent = fertig + ' / ' + gesamt;
+      // gelegentlich an den Browser zurückgeben, damit der Balken sichtbar läuft
+      if (fertig % 15 === 0 || fertig === gesamt) {
+        return new Promise(function (res) { requestAnimationFrame(function () { res(); }); });
+      }
+    };
+
+    TG.baueAlles({
+      records: records, cfg: cfg, jsPDFCtor: jsPDF, JSZipCtor: JSZip, onProgress: onProgress
+    }).then(function (res) {
+      meldung($('genstatus'), 'Packe ZIP …', 'info');
+      return res.zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+        function (m) { fill.textContent = 'ZIP ' + Math.round(m.percent) + '%'; });
+    }).then(function (blob) {
+      var name = 'tickets_' + new Date().toISOString().slice(0, 10) + '.zip';
+      downloadBlob(blob, name);
+      bar.style.display = 'none';
+      meldung($('genstatus'),
+        '✓ Fertig: ' + records.length + ' Ticket(s) erzeugt. ZIP „' + name + '" wurde heruntergeladen ' +
+        '(enthält die PDFs, tokens.json und versand_manifest.csv).', 'ok');
+    }).catch(function (err) {
+      bar.style.display = 'none';
+      meldung($('genstatus'), 'Fehler bei der Erzeugung: ' + (err && err.message ? err.message : err), 'fehler');
+    }).then(function () {
+      $('go').disabled = false; $('vorschauBtn').disabled = false; $('csvfile').disabled = false;
+    });
+  });
+
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+})();
+</script>
+</body>
+</html>

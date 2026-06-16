@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Einlass-Scanner (offline)</title>
+<style>
+  :root{
+    --akzent:#1f6cb4; --rahmen:#d7dde3; --bg:#eef1f4; --text:#1d2733;
+    --ok:#1f8a4c; --ok-bg:#1f8a4c; --warn:#e0a800; --fehler:#c0392b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);
+       display:flex;flex-direction:column;min-height:100%}
+  header{background:var(--akzent);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 16px;flex-wrap:wrap}
+  header h1{margin:0;font-size:1.15rem;flex:1;min-width:160px}
+  .zaehler{font-size:1.05rem;font-weight:700;background:rgba(255,255,255,.16);padding:6px 12px;border-radius:8px;white-space:nowrap}
+  header .tools{display:flex;gap:8px;flex-wrap:wrap}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:9px 14px;font-weight:600}
+  .btn-light{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.4)}
+  .btn-light:hover{background:rgba(255,255,255,.28)}
+  main{flex:1;display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1.3fr);gap:16px;padding:16px;min-height:0}
+  @media (max-width:820px){ main{grid-template-columns:1fr} }
+  .panel{background:#fff;border:1px solid var(--rahmen);border-radius:12px;padding:16px;display:flex;flex-direction:column;min-height:0}
+  .feldlabel{font-size:.85rem;font-weight:600;color:#445;margin-bottom:6px}
+  #code{width:100%;font-size:1.5rem;padding:14px 16px;border:2px solid var(--akzent);border-radius:10px;text-align:center;letter-spacing:1px}
+  #code:focus{outline:none;border-color:#16518a;box-shadow:0 0 0 4px rgba(31,108,180,.18)}
+  .fokus-hint{font-size:.78rem;margin-top:6px;color:#789}
+  .fokus-hint.aktiv{color:var(--ok)}
+  /* Ampel-Ergebnis */
+  #ergebnis{flex:1;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+            text-align:center;padding:22px;color:#fff;background:#5a6b7b;transition:background .1s;min-height:230px}
+  #ergebnis.gueltig{background:var(--ok)}
+  #ergebnis.benutzt{background:var(--warn);color:#3a2e00}
+  #ergebnis.ungueltig{background:var(--fehler)}
+  #ergebnis .icon{font-size:4.2rem;line-height:1}
+  #ergebnis .titel{font-size:2.1rem;font-weight:800;margin:6px 0}
+  #ergebnis .name{font-size:1.7rem;font-weight:700}
+  #ergebnis .detail{font-size:1.2rem;margin-top:6px;opacity:.95}
+  #ergebnis .zusatz{font-size:1rem;margin-top:10px;opacity:.9}
+  /* Kamera */
+  .kamera-wrap{margin-top:14px}
+  #video{width:100%;max-height:240px;background:#000;border-radius:10px;object-fit:cover;display:none}
+  .reihe{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .btn{background:var(--akzent);color:#fff}
+  .btn:hover{background:#16518a}
+  .btn-sek{background:#e9eef3;color:var(--text);border:1px solid var(--rahmen)}
+  .btn-sek:hover{background:#dde4ea}
+  .status{padding:8px 12px;border-radius:8px;font-size:.9rem;margin-top:10px}
+  .status.ok{background:#e7f6ed;color:#155e34;border:1px solid #b6e0c4}
+  .status.fehler{background:#fdecea;color:#a02617;border:1px solid #f3c0b8}
+  .status.info{background:#eaf2fb;color:#16518a;border:1px solid #c3d9f1}
+  /* Verlauf */
+  .verlauf{flex:1;overflow:auto;border:1px solid var(--rahmen);border-radius:10px;margin-top:8px}
+  .verlauf table{border-collapse:collapse;width:100%;font-size:.85rem}
+  .verlauf th,.verlauf td{padding:6px 9px;border-bottom:1px solid #eef2f6;text-align:left;white-space:nowrap}
+  .verlauf th{position:sticky;top:0;background:#eef2f6}
+  .chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:700;color:#fff}
+  .chip.gueltig{background:var(--ok)} .chip.benutzt{background:var(--warn);color:#3a2e00} .chip.ungueltig{background:var(--fehler)}
+  .hint-banner{background:#fff7df;border:1px solid #f0d780;color:#7a5c00;padding:10px 14px;border-radius:10px;
+               margin:0 16px;display:none;align-items:center;gap:12px}
+  .hint-banner button{padding:6px 12px}
+  /* Setup-Overlay */
+  #setup{position:fixed;inset:0;background:rgba(20,30,45,.75);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}
+  #setup .box{background:#fff;border-radius:14px;padding:26px;max-width:460px;text-align:center}
+  #setup h2{margin:0 0 8px} #setup p{color:#556;font-size:.95rem}
+  .gross{font-size:1.05rem;padding:12px 18px}
+  .small{font-size:.8rem;color:#667}
+  code{background:#eef2f6;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Einlass-Kontrolle</h1>
+  <div class="zaehler" id="zaehler">Eingecheckt: 0 / 0</div>
+  <div class="tools">
+    <button class="btn-light" id="btnSichern">Stand sichern</button>
+    <button class="btn-light" id="btnLaden">Stand laden</button>
+    <button class="btn-light" id="btnTokens">Tickets-Datei</button>
+  </div>
+</header>
+
+<div class="hint-banner" id="hintBanner">
+  <span id="hintText">Bitte den Stand sichern.</span>
+  <button class="btn" id="hintSichern">Jetzt sichern</button>
+  <button class="btn-sek" id="hintZu">Später</button>
+</div>
+
+<main>
+  <section class="panel">
+    <div class="feldlabel">Code scannen oder eingeben — danach <strong>Enter</strong></div>
+    <input id="code" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Code …">
+    <div class="fokus-hint" id="fokusHint">Eingabe nicht aktiv — bitte ins Feld klicken.</div>
+
+    <div class="kamera-wrap">
+      <video id="video" playsinline muted></video>
+      <div class="reihe">
+        <button class="btn" id="btnKamera">Kamera starten</button>
+        <span class="small" id="kameraInfo">USB-Scanner funktioniert immer. Kamera nur, wenn der Browser sie erlaubt.</span>
+      </div>
+    </div>
+    <div id="ladeStatus"></div>
+  </section>
+
+  <section class="panel">
+    <div id="ergebnis">
+      <div class="icon">⏳</div>
+      <div class="titel">Bereit</div>
+      <div class="detail" id="erg_detail">Bitte zuerst die Tickets-Datei (tokens.json) laden.</div>
+    </div>
+    <div class="feldlabel" style="margin-top:14px">Verlauf (neueste zuerst)</div>
+    <div class="verlauf">
+      <table>
+        <thead><tr><th>Zeit</th><th>Ergebnis</th><th>Name / Code</th></tr></thead>
+        <tbody id="verlaufBody"><tr><td colspan="3" class="small" style="padding:12px">Noch keine Scans.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- Setup: Tickets-Datei laden -->
+<div id="setup">
+  <div class="box">
+    <h2>Tickets-Datei laden</h2>
+    <p>Bitte die vom Organisator erhaltene Datei <code>tokens.json</code> auswählen.
+       Erst danach kann eingelassen werden.</p>
+    <button class="btn gross" id="btnTokens2">tokens.json auswählen</button>
+    <p class="small" id="setupFehler" style="color:#a02617"></p>
+    <p class="small">Optional kann anschließend über „Stand laden" ein zuvor gesicherter
+       Einlass-Stand wiederhergestellt werden.</p>
+  </div>
+</div>
+
+<!-- versteckte Datei-Eingaben -->
+<input type="file" id="fileTokens" accept=".json,application/json" style="display:none">
+<input type="file" id="fileLog" accept=".csv,text/csv,text/plain" style="display:none">
+
+<!-- ===== Bibliotheken (lokal eingebettet, keine externen Referenzen) ===== -->
+<!--INLINE:jsqr-->
+<!--INLINE:core-scanner-->
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  var tokenMap = null;            // Map token -> ticketdaten
+  var state = new Map();          // Map token -> { zeit } (entwertet)
+  var log = [];                   // Ereignisse { token, name, zeit, ergebnis }
+  var scansSeitHinweis = 0;
+  var HINWEIS_ALLE = 25;
+  var letzterKameraCode = '', letzteKameraZeit = 0;
+
+  /* ---------- Hilfen ---------- */
+  function meldung(text, typ) {
+    var el = $('ladeStatus'); el.innerHTML = '';
+    if (!text) return;
+    var d = document.createElement('div'); d.className = 'status ' + (typ || 'info'); d.textContent = text;
+    el.appendChild(d);
+  }
+  function aktualisiereZaehler() {
+    var gesamt = tokenMap ? tokenMap.size : 0;
+    $('zaehler').textContent = 'Eingecheckt: ' + state.size + ' / ' + gesamt;
+  }
+  function fokus() { try { $('code').focus(); } catch (e) {} }
+
+  /* ---------- Tokens laden ---------- */
+  function ladeTokensDatei(file, ausSetup) {
+    var reader = new FileReader();
+    reader.onerror = function () { setzeSetupFehler('Datei konnte nicht gelesen werden.'); };
+    reader.onload = function () {
+      try {
+        tokenMap = TS.ladeTokens(String(reader.result));
+        $('setup').style.display = 'none';
+        aktualisiereZaehler();
+        meldung(tokenMap.size + ' Tickets geladen. Bereit zum Scannen.', 'ok');
+        zeigeErgebnis({ ergebnis: 'bereit' });
+        fokus();
+      } catch (err) {
+        if (ausSetup) setzeSetupFehler(err.message);
+        else meldung('Fehler: ' + err.message, 'fehler');
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+  function setzeSetupFehler(t) { $('setupFehler').textContent = t || ''; }
+
+  $('fileTokens').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (f) ladeTokensDatei(f, $('setup').style.display !== 'none');
+    e.target.value = '';
+  });
+  $('btnTokens').addEventListener('click', function () { $('fileTokens').click(); });
+  $('btnTokens2').addEventListener('click', function () { $('fileTokens').click(); });
+
+  /* ---------- Prüfen + Anzeigen ---------- */
+  function pruefeCode(raw, quelle) {
+    if (!tokenMap) { meldung('Bitte zuerst die Tickets-Datei (tokens.json) laden.', 'fehler'); $('setup').style.display = 'flex'; return; }
+    var code = String(raw || '').trim();
+    if (!code) return;
+    var r = TS.pruefe(code, tokenMap, state);
+    if (r.ergebnis === 'leer') return;
+
+    log.push({ token: r.token, name: TS.name(r.rec), zeit: r.zeit, ergebnis: TS.ERG_TEXT[r.ergebnis] });
+    zeigeErgebnis(r);
+    feedback(r.ergebnis);
+    aktualisiereZaehler();
+    verlaufZeile(r);
+
+    scansSeitHinweis++;
+    if (scansSeitHinweis >= HINWEIS_ALLE) { scansSeitHinweis = 0; zeigeHinweis(); }
+  }
+
+  function zeigeErgebnis(r) {
+    var box = $('ergebnis');
+    box.className = '';
+    var icon = '⏳', titel = 'Bereit', detail = '', name = '', zusatz = '';
+    if (r.ergebnis === 'gueltig') {
+      box.className = 'gueltig'; icon = '✓'; titel = 'Gültig';
+      name = TS.name(r.rec); detail = platzText(r.rec);
+    } else if (r.ergebnis === 'benutzt') {
+      box.className = 'benutzt'; icon = '⚠'; titel = 'Bereits benutzt';
+      name = TS.name(r.rec); detail = platzText(r.rec);
+      zusatz = 'Zuletzt eingecheckt: ' + zeitLesbar(r.vorigeZeit);
+    } else if (r.ergebnis === 'ungueltig') {
+      box.className = 'ungueltig'; icon = '✗'; titel = 'Ungültig';
+      detail = 'Dieser Code ist nicht in der Liste.';
+    } else if (r.ergebnis === 'bereit') {
+      detail = 'Code scannen oder eingeben.';
+    } else {
+      detail = 'Bitte zuerst die Tickets-Datei (tokens.json) laden.';
+    }
+    box.innerHTML = '';
+    add(box, 'icon', icon);
+    add(box, 'titel', titel);
+    if (name) add(box, 'name', name);
+    if (detail) add(box, 'detail', detail);
+    if (zusatz) add(box, 'zusatz', zusatz);
+  }
+  function add(parent, cls, txt) { var d = document.createElement('div'); d.className = cls; d.textContent = txt; parent.appendChild(d); }
+  function platzText(rec) {
+    if (!rec) return '';
+    var bp = [];
+    if (rec.block) bp.push('Block ' + rec.block);
+    if (rec.platz) bp.push('Platz ' + rec.platz);
+    return bp.join('   ·   ');
+  }
+  function zeitLesbar(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function verlaufZeile(r) {
+    var body = $('verlaufBody');
+    if (body.dataset.leer !== '0') { body.innerHTML = ''; body.dataset.leer = '0'; }
+    var tr = document.createElement('tr');
+    var cls = r.ergebnis;
+    var nameOderCode = r.rec ? TS.name(r.rec) : r.token;
+    tr.innerHTML = '<td>' + zeitLesbar(r.zeit).split(', ').pop() + '</td>' +
+      '<td><span class="chip ' + cls + '">' + TS.ERG_TEXT[r.ergebnis] + '</span></td>' +
+      '<td></td>';
+    tr.children[2].textContent = nameOderCode || '—';
+    body.insertBefore(tr, body.firstChild);
+    while (body.children.length > 50) body.removeChild(body.lastChild);
+  }
+
+  /* ---------- akustisches/haptisches Feedback ---------- */
+  var audioCtx = null;
+  function beep(freqs, dauer) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var t = audioCtx.currentTime;
+      freqs.forEach(function (f, i) {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = f; o.type = 'square';
+        g.gain.value = 0.05; o.connect(g); g.connect(audioCtx.destination);
+        o.start(t + i * dauer); o.stop(t + (i + 1) * dauer);
+      });
+    } catch (e) {}
+  }
+  function feedback(erg) {
+    if (erg === 'gueltig') { beep([880], 0.12); vib(80); }
+    else if (erg === 'benutzt') { beep([600, 600], 0.12); vib([60, 60, 60]); }
+    else if (erg === 'ungueltig') { beep([240, 200], 0.16); vib([120, 60, 120]); }
+  }
+  function vib(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+
+  /* ---------- Eingabefeld (USB-Scanner / Tastatur) ---------- */
+  var codeEl = $('code');
+  codeEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); var v = codeEl.value; codeEl.value = ''; pruefeCode(v, 'tastatur'); }
+  });
+  // Eingabe-Fokus aktiv halten (USB-Scanner tippt in das fokussierte Feld)
+  function fokusStatus() {
+    var aktiv = document.activeElement === codeEl;
+    $('fokusHint').textContent = aktiv ? 'Eingabe aktiv — bereit zum Scannen.' : 'Eingabe nicht aktiv — bitte ins Feld klicken.';
+    $('fokusHint').className = 'fokus-hint' + (aktiv ? ' aktiv' : '');
+  }
+  codeEl.addEventListener('focus', fokusStatus);
+  codeEl.addEventListener('blur', function () {
+    fokusStatus();
+    // Fokus zurückholen, sofern nicht bewusst ein Bedien-Element genutzt wird
+    setTimeout(function () {
+      var a = document.activeElement;
+      if (!a || a === document.body) fokus();
+    }, 60);
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.tagName === 'BUTTON' || t.tagName === 'INPUT' || t.tagName === 'A') return;
+    fokus();
+  });
+  window.addEventListener('focus', fokus);
+
+  /* ---------- Kamera (optional, best effort) ---------- */
+  var stream = null, rafId = null, canvas = document.createElement('canvas'), cctx = canvas.getContext('2d', { willReadFrequently: true });
+  $('btnKamera').addEventListener('click', function () { stream ? stoppeKamera() : starteKamera(); });
+
+  function starteKamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $('kameraInfo').textContent = 'Kamera ist hier nicht verfügbar (Datei direkt geöffnet). Bitte den USB-Scanner verwenden.';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function (s) {
+        stream = s;
+        var v = $('video'); v.srcObject = s; v.style.display = 'block';
+        $('btnKamera').textContent = 'Kamera stoppen';
+        $('kameraInfo').textContent = 'Kamera aktiv — Code in das Bild halten.';
+        return v.play();
+      })
+      .then(function () { scanLoop(); })
+      .catch(function (err) {
+        $('kameraInfo').textContent = 'Kamera nicht verfügbar (' + (err && err.name ? err.name : 'Fehler') + '). Bitte den USB-Scanner verwenden.';
+        stoppeKamera();
+      });
+  }
+  function stoppeKamera() {
+    if (rafId) cancelAnimationFrame(rafId), rafId = null;
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    var v = $('video'); v.style.display = 'none'; v.srcObject = null;
+    $('btnKamera').textContent = 'Kamera starten';
+    fokus();
+  }
+  function scanLoop() {
+    var v = $('video');
+    if (v.readyState === v.HAVE_ENOUGH_DATA && v.videoWidth) {
+      canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+      cctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      var img = cctx.getImageData(0, 0, canvas.width, canvas.height);
+      var code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+      if (code && code.data) {
+        var jetzt = Date.now();
+        if (code.data !== letzterKameraCode || (jetzt - letzteKameraZeit) > 2500) {
+          letzterKameraCode = code.data; letzteKameraZeit = jetzt;
+          pruefeCode(code.data, 'kamera');
+        }
+      }
+    }
+    rafId = requestAnimationFrame(scanLoop);
+  }
+
+  /* ---------- Stand sichern / laden ---------- */
+  function downloadText(text, name, mime) {
+    var blob = new Blob([text], { type: (mime || 'text/csv') + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+  function sichern() {
+    if (!log.length) { meldung('Noch keine Scans zum Sichern vorhanden.', 'info'); return; }
+    var stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+    downloadText(TS.logToCsv(log), 'einlass_log_' + stamp + '.csv', 'text/csv');
+    meldung('Stand gesichert (' + log.length + ' Einträge). Datei sicher aufbewahren.', 'ok');
+    verbergeHinweis();
+    fokus();
+  }
+  $('btnSichern').addEventListener('click', sichern);
+  $('hintSichern').addEventListener('click', sichern);
+
+  $('btnLaden').addEventListener('click', function () { $('fileLog').click(); });
+  $('fileLog').addEventListener('change', function (e) {
+    var f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var neu = TS.csvToLog(String(reader.result));
+        if (!neu.length) { meldung('Im Einlass-Log wurden keine Einträge gefunden.', 'fehler'); return; }
+        log = TS.mergeLog(log, neu);
+        state = TS.zustandAusLog(log);
+        aktualisiereZaehler();
+        neuVerlauf();
+        meldung('Stand geladen: ' + log.length + ' Einträge, ' + state.size + ' Ticket(s) bereits entwertet.', 'ok');
+      } catch (err) {
+        meldung('Fehler beim Laden des Stands: ' + err.message, 'fehler');
+      }
+      fokus();
+    };
+    reader.readAsText(f, 'UTF-8');
+  });
+
+  function neuVerlauf() {
+    var body = $('verlaufBody'); body.innerHTML = ''; body.dataset.leer = '0';
+    log.slice(-50).reverse().forEach(function (e) {
+      var erg = ergKey(e.ergebnis);
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + zeitLesbar(e.zeit).split(', ').pop() + '</td>' +
+        '<td><span class="chip ' + erg + '">' + e.ergebnis + '</span></td><td></td>';
+      tr.children[2].textContent = e.name || e.token || '—';
+      body.appendChild(tr);
+    });
+    if (!log.length) { body.innerHTML = '<tr><td colspan="3" class="small" style="padding:12px">Noch keine Scans.</td></tr>'; body.dataset.leer = '1'; }
+  }
+  function ergKey(text) {
+    var t = String(text || '').toLowerCase();
+    if (t.indexOf('gült') === 0) return 'gueltig';
+    if (t.indexOf('bereits') === 0) return 'benutzt';
+    return 'ungueltig';
+  }
+
+  /* ---------- Hinweis-Banner ---------- */
+  function zeigeHinweis() {
+    $('hintText').textContent = 'Schon ' + HINWEIS_ALLE + ' weitere Scans — bitte den Stand sichern.';
+    $('hintBanner').style.display = 'flex';
+  }
+  function verbergeHinweis() { $('hintBanner').style.display = 'none'; }
+  $('hintZu').addEventListener('click', verbergeHinweis);
+
+  /* ---------- Start ---------- */
+  $('verlaufBody').dataset.leer = '1';
+  aktualisiereZaehler();
+  fokusStatus();
+  window.addEventListener('beforeunload', function (e) {
+    if (log.length && state.size) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+</body>
+</html>
