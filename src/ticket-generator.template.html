@@ -99,6 +99,10 @@
       <div class="feld"><label>Dateiname-Muster</label><input type="text" id="muster" value="{nachname}, {vorname} - Ticket {nr}von{anzahl}">
         <p class="hinweis">Platzhalter u.a. <code>{nachname} {vorname} {nr} {anzahl} {index}</code>. Standard passt zum Outlook-Makro.</p>
       </div>
+      <div class="feld"><label>Druckqualität</label>
+        <label style="font-weight:400;margin-top:6px"><input type="checkbox" id="kompakt" style="width:auto;margin-right:6px">Kompakte PDFs (für sehr große Mengen)</label>
+        <p class="hinweis">Standard = hohe Druckauflösung (~240 dpi). „Kompakt" verkleinert nur die Hintergründe für kleinere Dateien.</p>
+      </div>
     </div>
   </section>
 
@@ -292,6 +296,30 @@ var VORLAGEN = {
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]; }); }
   aktualisiereKarte();
 
+  /* ---------- Hintergründe für die Ausgabe vorbereiten ----------
+   * Standard: volle eingebettete Auflösung (~240 dpi, scharf).
+   * Kompakt: einmalig im Browser auf ~1200 px verkleinern (kleinere PDFs). */
+  function downscale(dataUrl, targetW) {
+    return new Promise(function (res) {
+      var img = new Image();
+      img.onload = function () {
+        if (!img.width || img.width <= targetW) { res(dataUrl); return; }
+        var c = document.createElement('canvas'); c.width = targetW; c.height = Math.round(img.height * targetW / img.width);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        try { res(c.toDataURL('image/jpeg', 0.8)); } catch (e) { res(dataUrl); }
+      };
+      img.onerror = function () { res(dataUrl); };
+      img.src = dataUrl;
+    });
+  }
+  var _assCache = null;
+  function bereiteAssets(kompakt) {
+    if (!kompakt || !ASSETS.front) return Promise.resolve(ASSETS);
+    if (_assCache) return Promise.resolve(_assCache);
+    return Promise.all([downscale(ASSETS.front, 1200), downscale(ASSETS.back, 1100)])
+      .then(function (a) { _assCache = { front: a[0], back: a[1] }; return _assCache; });
+  }
+
   /* ---------- Erzeugen ---------- */
   $('go').addEventListener('click', function () {
     if (!records.length) return;
@@ -304,7 +332,8 @@ var VORLAGEN = {
       var pct = Math.round(fertig / gesamt * 100); fill.style.width = pct + '%'; fill.textContent = fertig + ' / ' + gesamt;
       if (fertig % 10 === 0 || fertig === gesamt) return new Promise(function (res) { requestAnimationFrame(function () { res(); }); });
     };
-    TG.baueAlles({ records: records, cfg: cfg, assets: ASSETS, jsPDFCtor: jsPDF, JSZipCtor: JSZip, onProgress: onProgress })
+    bereiteAssets($('kompakt').checked)
+      .then(function (ass) { return TG.baueAlles({ records: records, cfg: cfg, assets: ass, jsPDFCtor: jsPDF, JSZipCtor: JSZip, onProgress: onProgress }); })
       .then(function (res) { meldung($('genstatus'), 'Packe ZIP …', 'info'); return res.zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }, function (m) { fill.textContent = 'ZIP ' + Math.round(m.percent) + '%'; }); })
       .then(function (blob) {
         var name = 'eintrittskarten_' + new Date().toISOString().slice(0, 10) + '.zip';
