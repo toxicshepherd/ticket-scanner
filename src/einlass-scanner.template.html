@@ -238,13 +238,7 @@
     if (zusatz) add(box, 'zusatz', zusatz);
   }
   function add(parent, cls, txt) { var d = document.createElement('div'); d.className = cls; d.textContent = txt; parent.appendChild(d); }
-  function platzText(rec) {
-    if (!rec) return '';
-    var bp = [];
-    if (rec.block) bp.push('Block ' + rec.block);
-    if (rec.platz) bp.push('Platz ' + rec.platz);
-    return bp.join('   ·   ');
-  }
+  function platzText(rec) { return TS.detail(rec); }
   function zeitLesbar(iso) {
     if (!iso) return '—';
     var d = new Date(iso);

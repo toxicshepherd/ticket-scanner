@@ -22,9 +22,20 @@ const QUELLEN = {
   jspdf: 'vendor/jspdf.umd.min.js',
   jszip: 'vendor/jszip.min.js',
   jsqr: 'vendor/jsqr.js',
+  xlsx: 'vendor/xlsx.mini.min.js',
   'core-generator': 'src/core-generator.js',
   'core-scanner': 'src/core-scanner.js'
 };
+
+// Karten-Hintergründe (aus der PowerPoint-Vorlage) als Data-URLs einbetten
+function assetsBlock() {
+  const data = {
+    front: 'data:image/jpeg;base64,' + fs.readFileSync(R('src/assets/front.jpg')).toString('base64'),
+    back: 'data:image/jpeg;base64,' + fs.readFileSync(R('src/assets/back.jpg')).toString('base64')
+  };
+  return '<script>\n/* ===== eingebettete Karten-Hintergründe (Originalvorlage, lokal) ===== */\n'
+    + 'window.__ASSETS=' + JSON.stringify(data) + ';\n</' + 'script>';
+}
 
 // JS für die sichere Einbettung in <script> aufbereiten
 function aufbereiten(code) {
@@ -46,6 +57,7 @@ function inlineBlock(marker) {
 function baue(template, ziel) {
   let html = fs.readFileSync(R(template), 'utf8');
   html = html.replace(/<!--INLINE:([\w-]+)-->/g, (m, name) => {
+    if (name === 'assets') return assetsBlock();
     if (!QUELLEN[name]) throw new Error('Unbekannter Inline-Marker: ' + name);
     return inlineBlock(name);
   });

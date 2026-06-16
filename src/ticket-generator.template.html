@@ -3,88 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ticket-Generator (offline)</title>
+<title>Ticket-Generator (offline) — Polizeiakademie Niedersachsen</title>
 <style>
-  :root{
-    --akzent:#1f6cb4; --akzent-dunkel:#16518a;
-    --ok:#1f8a4c; --warn:#b8860b; --fehler:#c0392b;
-    --rahmen:#d7dde3; --bg:#f4f6f8; --text:#1d2733;
-  }
+  :root{ --akzent:#15528f; --akzent2:#0f3f6f; --rahmen:#d7dde3; --bg:#f4f6f8; --text:#1d2733;
+         --ok:#1f8a4c; --fehler:#c0392b; }
   *{box-sizing:border-box}
   body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);line-height:1.45}
   header{background:var(--akzent);color:#fff;padding:14px 20px}
-  header h1{margin:0;font-size:1.25rem}
-  header p{margin:4px 0 0;opacity:.9;font-size:.85rem}
-  main{max-width:980px;margin:0 auto;padding:18px}
+  header h1{margin:0;font-size:1.25rem} header p{margin:4px 0 0;opacity:.9;font-size:.85rem}
+  main{max-width:1000px;margin:0 auto;padding:18px}
   section{background:#fff;border:1px solid var(--rahmen);border-radius:10px;padding:16px 18px;margin-bottom:16px}
-  section > h2{margin:0 0 12px;font-size:1.05rem;display:flex;align-items:center;gap:8px}
+  section>h2{margin:0 0 12px;font-size:1.05rem;display:flex;align-items:center;gap:8px}
   .nr{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--akzent);color:#fff;font-size:.85rem;flex:none}
   label{display:block;font-size:.82rem;font-weight:600;margin:0 0 3px;color:#445}
-  input[type=text],select{width:100%;padding:8px 10px;border:1px solid var(--rahmen);border-radius:7px;font-size:.95rem;background:#fff;color:var(--text)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  input[type=text],select,input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--rahmen);border-radius:7px;font-size:.95rem;background:#fff;color:var(--text)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
   .feld{margin-bottom:2px}
   .hinweis{font-size:.8rem;color:#667;margin:6px 0 0}
   button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:10px 16px;background:var(--akzent);color:#fff;font-weight:600}
-  button:hover{background:var(--akzent-dunkel)}
-  button:disabled{background:#aab4bd;cursor:not-allowed}
-  button.sekundaer{background:#e9eef3;color:var(--text);border:1px solid var(--rahmen)}
-  button.sekundaer:hover{background:#dde4ea}
+  button:hover{background:var(--akzent2)} button:disabled{background:#aab4bd;cursor:not-allowed}
+  button.sekundaer{background:#e9eef3;color:var(--text);border:1px solid var(--rahmen)} button.sekundaer:hover{background:#dde4ea}
   .filerow{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-  input[type=file]{font-size:.9rem}
-  table{border-collapse:collapse;width:100%;font-size:.82rem;margin-top:10px}
-  th,td{border:1px solid var(--rahmen);padding:5px 7px;text-align:left;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+  table{border-collapse:collapse;width:100%;font-size:.8rem;margin-top:10px}
+  th,td{border:1px solid var(--rahmen);padding:5px 7px;text-align:left;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
   th{background:#eef2f6}
   .status{padding:8px 12px;border-radius:7px;font-size:.9rem;margin-top:10px}
   .status.ok{background:#e7f6ed;color:#155e34;border:1px solid #b6e0c4}
   .status.fehler{background:#fdecea;color:#a02617;border:1px solid #f3c0b8}
   .status.info{background:#eaf2fb;color:#16518a;border:1px solid #c3d9f1}
   .bar{height:22px;background:#e9eef3;border-radius:11px;overflow:hidden;margin-top:10px;display:none}
-  .bar > div{height:100%;width:0;background:var(--akzent);transition:width .15s;text-align:center;color:#fff;font-size:.75rem;line-height:22px}
+  .bar>div{height:100%;width:0;background:var(--akzent);transition:width .15s;text-align:center;color:#fff;font-size:.75rem;line-height:22px}
   .mapping{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:6px}
-  .vorschau-wrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
-  /* ===== VORLAGE (HTML/CSS-Vorschau der Karte) — Design hier anpassen,
-       parallel zur Funktion zeichneTicket() in core-generator.js ===== */
-  .karte{width:230px;aspect-ratio:105/148;border:1px solid var(--rahmen);border-radius:8px;overflow:hidden;
-         background:#fff;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,.08);font-size:11px}
-  .karte .kopf{background:var(--akzent);color:#fff;text-align:center;padding:8px 6px}
-  .karte .kopf .anlass{font-weight:700;font-size:12px}
-  .karte .kopf .meta{font-size:9px;opacity:.95;margin-top:2px}
-  .karte .label{text-align:center;letter-spacing:2px;color:#789;font-size:8px;margin-top:8px}
-  .karte .name{text-align:center;font-weight:700;font-size:14px;margin:4px 8px}
-  .karte .bp{text-align:center;color:#556;font-size:10px}
-  .karte .qr{flex:1;display:flex;align-items:center;justify-content:center}
-  .karte .qr img{width:62%;image-rendering:pixelated}
-  .karte .fuss{text-align:center;color:#99a;font-size:7px;padding:0 6px 6px}
-  .small{font-size:.8rem;color:#667}
-  code{background:#eef2f6;padding:1px 5px;border-radius:4px;font-size:.85em}
+  .small{font-size:.8rem;color:#667} code{background:#eef2f6;padding:1px 5px;border-radius:4px}
+  /* ===== Vorschau-Karte (spiegelt das PDF; Maße = mm * 2.83) ===== */
+  .karte{position:relative;width:600px;max-width:100%;aspect-ratio:212/100;background-size:cover;border:1px solid var(--rahmen);
+         border-radius:4px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,.12);color:#fff}
+  .karte .ov{position:absolute;}
+  .karte .qrbox{background:#fff;display:flex;align-items:center;justify-content:center}
+  .karte .qrbox img{width:100%;height:100%;image-rendering:pixelated}
+  .karte .ctr{text-align:center}
+  .karte .dark{color:#1e2340}
+  .vorschauWrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
 </style>
 </head>
 <body>
 <header>
   <h1>Ticket-Generator</h1>
-  <p>Vollständig offline · erzeugt personalisierte Ticket-PDFs, <code>tokens.json</code> und Versand-Manifest</p>
+  <p>Vollständig offline · Polizeiakademie Niedersachsen · erzeugt Karten-PDFs (Vorder-/Rückseite), <code>tokens.json</code> und Versand-Manifest</p>
 </header>
 
 <main>
   <section>
-    <h2><span class="nr">1</span> Veranstaltung</h2>
-    <p class="hinweis">Vorbelegt aus den Konstanten am Anfang des Skripts. Hier bei Bedarf für diesen Lauf überschreiben.</p>
-    <div class="grid">
-      <div class="feld"><label>Anlass</label><input type="text" id="f_anlass"></div>
-      <div class="feld"><label>Datum</label><input type="text" id="f_datum"></div>
-      <div class="feld"><label>Uhrzeit</label><input type="text" id="f_uhrzeit"></div>
-      <div class="feld"><label>Ort</label><input type="text" id="f_ort"></div>
-      <div class="feld"><label>Fußzeile</label><input type="text" id="f_fuss"></div>
+    <h2><span class="nr">1</span> Anlass &amp; Texte</h2>
+    <div class="feld" style="max-width:340px">
+      <label>Anlass-Vorlage</label>
+      <select id="vorlage"></select>
+      <p class="hinweis">Füllt die Felder vor — alles bleibt frei editierbar.</p>
+    </div>
+    <div class="grid" style="margin-top:8px">
+      <div class="feld"><label>Abriss: Titel (groß)</label><input type="text" id="linksTitel"></div>
+      <div class="feld"><label>Abriss: Zusatz</label><input type="text" id="linksZusatz"></div>
+      <div class="feld"><label>Abriss: Datum/Uhrzeit</label><input type="text" id="linksDatum"></div>
+      <div class="feld"><label>Abriss: Einlass</label><input type="text" id="linksEinlass"></div>
+      <div class="feld"><label>Rechts: Datum (graue Leiste)</label><input type="text" id="datumLang"></div>
+      <div class="feld"><label>Rechts: Anlass-Satz</label><input type="text" id="anlass"></div>
+      <div class="feld" style="grid-column:1/-1"><label>Rechts: Veranstaltungsort</label><input type="text" id="ort"></div>
     </div>
   </section>
 
   <section>
-    <h2><span class="nr">2</span> Teilnehmerliste (CSV)</h2>
+    <h2><span class="nr">2</span> Teilnehmerliste (Excel/CSV)</h2>
     <div class="filerow">
-      <input type="file" id="csvfile" accept=".csv,text/csv,text/plain">
-      <span class="small">Trennzeichen <code>;</code> oder <code>,</code> und UTF-8 werden automatisch erkannt.</span>
+      <input type="file" id="datei" accept=".xlsx,.xls,.csv,text/csv">
+      <span class="small">Excel <code>.xlsx</code> (Blatt wählbar) oder CSV. Spalten werden automatisch erkannt.</span>
     </div>
-    <div id="csvstatus"></div>
+    <div id="dateistatus"></div>
+    <div id="sheetbox" style="display:none;margin-top:10px;max-width:340px">
+      <label>Tabellenblatt</label><select id="sheet"></select>
+    </div>
     <div id="mappingbox" style="display:none">
       <label style="margin-top:14px">Spaltenzuordnung (automatisch erkannt — bei Bedarf korrigieren)</label>
       <div class="mapping" id="mapping"></div>
@@ -96,299 +92,229 @@
   <section>
     <h2><span class="nr">3</span> Optionen</h2>
     <div class="grid">
-      <div class="feld">
-        <label>Dateiname-Muster</label>
-        <input type="text" id="f_muster">
-        <p class="hinweis">Platzhalter: <code>{nachname} {vorname} {anrede} {email} {block} {platz} {index}</code></p>
+      <div class="feld"><label>Tickets pro Person</label><input type="number" id="ticketsProPerson" min="1" max="20" value="1"></div>
+      <div class="feld"><label>QR-Fehlerkorrektur</label>
+        <select id="ec"><option value="L">L — niedrig</option><option value="M" selected>M — Standard</option><option value="Q">Q — hoch</option><option value="H">H — sehr hoch</option></select>
       </div>
-      <div class="feld">
-        <label>QR-Fehlerkorrektur</label>
-        <select id="f_ec">
-          <option value="L">L — niedrig (kleinster Code)</option>
-          <option value="M" selected>M — Standard (empfohlen)</option>
-          <option value="Q">Q — hoch</option>
-          <option value="H">H — sehr hoch (robust)</option>
-        </select>
+      <div class="feld"><label>Dateiname-Muster</label><input type="text" id="muster" value="{nachname}, {vorname} - Ticket {nr}von{anzahl}">
+        <p class="hinweis">Platzhalter u.a. <code>{nachname} {vorname} {nr} {anzahl} {index}</code>. Standard passt zum Outlook-Makro.</p>
       </div>
     </div>
   </section>
 
   <section>
-    <h2><span class="nr">4</span> Tickets erzeugen</h2>
-    <button id="go" disabled>Tickets erzeugen &amp; ZIP herunterladen</button>
-    <button id="vorschauBtn" class="sekundaer" disabled>Vorschau aktualisieren</button>
+    <h2><span class="nr">4</span> Karten erzeugen</h2>
+    <button id="go" disabled>Karten erzeugen &amp; ZIP herunterladen</button>
+    <button id="vorschauBtn" class="sekundaer">Vorschau aktualisieren</button>
     <div class="bar" id="bar"><div id="barfill">0%</div></div>
     <div id="genstatus"></div>
-    <div class="vorschau-wrap" style="margin-top:14px">
+    <div class="vorschauWrap" style="margin-top:14px">
       <div>
-        <div class="small" style="margin-bottom:6px">Vorschau (erste Person der Liste):</div>
-        <!-- VORLAGE: HTML-Karte -->
+        <div class="small" style="margin-bottom:6px">Vorschau Vorderseite (erste Person):</div>
+        <!-- VORLAGE: HTML-Vorschau der Karte (spiegelt zeichneFront in core-generator.js) -->
         <div class="karte" id="karte">
-          <div class="kopf"><div class="anlass" id="k_anlass">Anlass</div><div class="meta" id="k_meta">Datum · Ort</div></div>
-          <div class="label">EINTRITTSKARTE</div>
-          <div class="name" id="k_name">Vorname Nachname</div>
-          <div class="bp" id="k_bp">Block — · Platz —</div>
-          <div class="qr"><img id="k_qr" alt="QR"></div>
-          <div class="fuss" id="k_fuss"></div>
+          <div class="ov qrbox" id="k_qrbox"><img id="k_qr" alt="QR"></div>
+          <div class="ov ctr" id="k_name"></div>
+          <div class="ov ctr" id="k_links"></div>
+          <div class="ov dark" id="k_datum"></div>
+          <div class="ov" id="k_anlass"></div>
+          <div class="ov" id="k_ort"></div>
         </div>
       </div>
-      <div class="small" style="max-width:380px">
-        <p><strong>Im ZIP enthalten:</strong></p>
-        <ul>
-          <li>Ein A6-PDF je Person (Name + scanbarer QR)</li>
-          <li><code>tokens.json</code> — gültige Tickets (bleibt lokal, nur für den Scanner)</li>
-          <li><code>versand_manifest.csv</code> — <code>Email;Dateiname</code> für den Outlook-Versand</li>
-        </ul>
-        <p>Der QR enthält <strong>ausschließlich</strong> ein zufälliges Token — keine personenbezogenen Daten.</p>
+      <div class="small" style="max-width:330px">
+        <p><strong>Im ZIP:</strong> je ein PDF (Vorder- + Rückseite) pro Ticket, <code>tokens.json</code> (nur für den Scanner) und <code>versand_manifest.csv</code>.</p>
+        <p>Der QR enthält <strong>nur</strong> ein zufälliges Token — keine personenbezogenen Daten.</p>
       </div>
     </div>
   </section>
 </main>
 
-<!-- ===== Bibliotheken (lokal eingebettet, keine externen Referenzen) ===== -->
+<!-- ===== Bibliotheken + Vorlagen (lokal eingebettet, keine externen Referenzen) ===== -->
 <!--INLINE:qrcode-->
 <!--INLINE:jspdf-->
 <!--INLINE:jszip-->
+<!--INLINE:xlsx-->
+<!--INLINE:assets-->
 <!--INLINE:core-generator-->
 
 <script>
 /* =====================================================================
- * KONFIGURATION — Standardwerte (oben in der Oberfläche überschreibbar)
+ * ANLASS-VORLAGEN — füllen die Textfelder vor (alles editierbar).
+ * Hier neue Anlässe ergänzen oder Texte anpassen.
  * ===================================================================== */
-var KONSTANTEN = {
-  anlass: 'Tag der offenen Tür',
-  datum: '16.06.2026',
-  uhrzeit: '10:00 Uhr',
-  ort: 'Musterbehörde, Musterstraße 1, 12345 Musterstadt',
-  fusszeile: 'Eintritt nur mit gültigem Lichtbildausweis.',
-  qrFehlerkorrektur: 'M',
-  dateinameMuster: 'Ticket_{nachname}_{vorname}_{email}',
-  // Farbe des Kopfbandes (RGB)
-  farbe: { r: 31, g: 108, b: 180 }
+var VORLAGEN = {
+  'Abschlussfeier': { linksTitel:'ABSCHLUSSFEIER', linksZusatz:'des Bachelor-Studienjahrgangs 20/21', linksDatum:'30.09.2024 um 12:00 Uhr', linksEinlass:'Einlass ab 10:30 Uhr', datumLang:'Montag, 30. September 2024 | 12:00 Uhr', anlass:'zur Abschlussfeier des Bachelor-Studienjahrgangs 20/21', ort:'Swiss Life Hall | Ferdinand-Wilhelm-Fricke-Weg 8 | 30169 Hannover' },
+  'Vereidigung': { linksTitel:'VEREIDIGUNG', linksZusatz:'der Bachelor-Studienjahrgänge 27/25 und 28/26', linksDatum:'15.04.2026 um 12:00 Uhr', linksEinlass:'Einlass ab 11:00 Uhr', datumLang:'Mittwoch, 15. April 2026 | 12:00 Uhr', anlass:'zur Vereidigung der Bachelor-Studienjahrgänge 27/25 und 28/26', ort:'HALLE 39 | Schinkelstraße 7 | 31137 Hildesheim' },
+  'Dienstbesprechung': { linksTitel:'DIENSTBESPRECHUNG', linksZusatz:'des Bachelor-Studienjahrgangs 26/26', linksDatum:'16.06.2026 um 09:00 Uhr', linksEinlass:'Einlass ab 08:30 Uhr', datumLang:'Dienstag, 16. Juni 2026 | 09:00 Uhr', anlass:'zur Dienstbesprechung des Bachelor-Studienjahrgangs 26/26', ort:'Raum 7 - Polizeiakademie Niedersachsen' },
+  'Ernennung': { linksTitel:'ERNENNUNG', linksZusatz:'des Bachelor-Studienjahrgangs', linksDatum:'', linksEinlass:'Einlass ab 11:00 Uhr', datumLang:'', anlass:'zur Ernennung des Bachelor-Studienjahrgangs', ort:'Polizeiakademie Niedersachsen' },
+  'Eigene (leer)': { linksTitel:'', linksZusatz:'', linksDatum:'', linksEinlass:'', datumLang:'', anlass:'', ort:'' }
 };
 /* ===================================================================== */
 
 (function () {
   'use strict';
-  var jsPDF = window.jspdf.jsPDF;
+  var jsPDF = window.jspdf.jsPDF, XLSX = window.XLSX, ASSETS = window.__ASSETS || {};
   var $ = function (id) { return document.getElementById(id); };
+  var CFGFELDER = ['linksTitel','linksZusatz','linksDatum','linksEinlass','datumLang','anlass','ort'];
 
-  var parsed = null;      // { delim, rows }
-  var mapping = null;     // { anrede, vorname, ... -> Spaltenindex }
-  var records = [];       // aktuelle Datensätze gemäß Mapping
+  var workbook = null;     // bei XLSX
+  var parsed = null;       // { rows }
+  var mapping = null;
+  var records = [];
 
-  // Felder vorbelegen
-  $('f_anlass').value = KONSTANTEN.anlass;
-  $('f_datum').value = KONSTANTEN.datum;
-  $('f_uhrzeit').value = KONSTANTEN.uhrzeit;
-  $('f_ort').value = KONSTANTEN.ort;
-  $('f_fuss').value = KONSTANTEN.fusszeile;
-  $('f_muster').value = KONSTANTEN.dateinameMuster;
-  $('f_ec').value = KONSTANTEN.qrFehlerkorrektur;
+  // Vorlagen-Dropdown füllen
+  var vsel = $('vorlage');
+  Object.keys(VORLAGEN).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = k; vsel.appendChild(o); });
+  function vorlageAnwenden(k) { var v = VORLAGEN[k] || {}; CFGFELDER.forEach(function (f) { if (f in v) $(f).value = v[f]; }); aktualisiereKarte(); }
+  vsel.addEventListener('change', function () { vorlageAnwenden(vsel.value); });
+  vorlageAnwenden('Abschlussfeier');
+  CFGFELDER.forEach(function (f) { $(f).addEventListener('input', aktualisiereKarte); });
+  $('ticketsProPerson').addEventListener('input', aktualisiereKarte);
+  $('vorschauBtn').addEventListener('click', aktualisiereKarte);
 
   function cfgAusForm() {
-    return {
-      anlass: $('f_anlass').value.trim(),
-      datum: $('f_datum').value.trim(),
-      uhrzeit: $('f_uhrzeit').value.trim(),
-      ort: $('f_ort').value.trim(),
-      fusszeile: $('f_fuss').value.trim(),
-      qrFehlerkorrektur: $('f_ec').value,
-      dateinameMuster: $('f_muster').value.trim() || KONSTANTEN.dateinameMuster,
-      farbe: KONSTANTEN.farbe
-    };
+    var c = { qrFehlerkorrektur: $('ec').value, dateinameMuster: $('muster').value.trim(), ticketsProPerson: parseInt($('ticketsProPerson').value, 10) || 1 };
+    CFGFELDER.forEach(function (f) { c[f] = $(f).value; });
+    return c;
   }
+  function meldung(el, text, typ) { el.innerHTML = ''; if (!text) return; var d = document.createElement('div'); d.className = 'status ' + (typ || 'info'); d.textContent = text; el.appendChild(d); }
 
-  function meldung(el, text, typ) {
-    el.innerHTML = '';
-    if (!text) return;
-    var d = document.createElement('div');
-    d.className = 'status ' + (typ || 'info');
-    d.textContent = text;
-    el.appendChild(d);
-  }
-
-  /* ---------- CSV einlesen ---------- */
-  $('csvfile').addEventListener('change', function (e) {
-    var file = e.target.files && e.target.files[0];
-    if (!file) return;
+  /* ---------- Datei einlesen (XLSX/CSV) ---------- */
+  $('datei').addEventListener('change', function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    workbook = null; $('sheetbox').style.display = 'none';
     var reader = new FileReader();
-    reader.onerror = function () { meldung($('csvstatus'), 'Die Datei konnte nicht gelesen werden.', 'fehler'); };
-    reader.onload = function () {
-      try {
-        verarbeiteCSV(String(reader.result));
-      } catch (err) {
-        meldung($('csvstatus'), 'Fehler beim Einlesen der CSV: ' + err.message, 'fehler');
-        $('mappingbox').style.display = 'none';
-        $('go').disabled = true; $('vorschauBtn').disabled = true;
-      }
-    };
-    reader.readAsText(file, 'UTF-8');
+    reader.onerror = function () { meldung($('dateistatus'), 'Die Datei konnte nicht gelesen werden.', 'fehler'); };
+    if (/\.(xlsx|xls)$/i.test(f.name)) {
+      reader.onload = function () {
+        try {
+          workbook = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
+          var sel = $('sheet'); sel.innerHTML = '';
+          workbook.SheetNames.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+          $('sheetbox').style.display = '';
+          // erstes Blatt, das nicht "ausgeplant" heißt
+          var first = workbook.SheetNames.filter(function (n) { return !/ausgeplant/i.test(n); })[0] || workbook.SheetNames[0];
+          sel.value = first; ladeBlatt(first);
+        } catch (err) { fehlerReset('Excel-Datei konnte nicht gelesen werden: ' + err.message); }
+      };
+      reader.readAsArrayBuffer(f);
+    } else {
+      reader.onload = function () { try { setzeRows(TG.parseCSV(String(reader.result)).rows, 'CSV'); } catch (err) { fehlerReset('CSV-Fehler: ' + err.message); } };
+      reader.readAsText(f, 'UTF-8');
+    }
   });
+  $('sheet').addEventListener('change', function () { if (workbook) ladeBlatt($('sheet').value); });
+  function ladeBlatt(name) {
+    try {
+      var rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, blankrows: false, defval: '' });
+      setzeRows(rows, 'Blatt „' + name + '"');
+    } catch (err) { fehlerReset('Blatt konnte nicht gelesen werden: ' + err.message); }
+  }
+  function fehlerReset(msg) { meldung($('dateistatus'), msg, 'fehler'); $('mappingbox').style.display = 'none'; $('go').disabled = true; }
 
-  function verarbeiteCSV(text) {
-    parsed = TG.parseCSV(text);
-    if (!parsed.rows.length) throw new Error('Die Datei enthält keine Daten.');
-    var header = TG.hatUeberschrift(parsed.rows);
-    $('hatHeader').checked = header;
-    mapping = TG.autoMapping(parsed.rows[0]);
-    baueMappingUI();
-    aktualisiere();
+  function setzeRows(rows, quelle) {
+    if (!rows || !rows.length) throw new Error('keine Daten gefunden.');
+    parsed = { rows: rows };
+    $('hatHeader').checked = TG.hatUeberschrift(rows);
+    mapping = TG.autoMapping(rows[0]);
+    baueMappingUI(); aktualisiere();
     $('mappingbox').style.display = '';
-    meldung($('csvstatus'),
-      parsed.rows.length + ' Zeile(n) gelesen · Trennzeichen "' + (parsed.delim === '\t' ? 'Tab' : parsed.delim) + '"',
-      'ok');
+    meldung($('dateistatus'), quelle + ': ' + rows.length + ' Zeile(n) gelesen.', 'ok');
   }
 
   function spaltenOptionen() {
-    // Liste der verfügbaren Spalten (Überschrift falls vorhanden, sonst "Spalte n")
-    var header = parsed.rows[0] || [];
-    var hatH = $('hatHeader').checked;
+    var header = parsed.rows[0] || [], hatH = $('hatHeader').checked;
     var anzahl = Math.max.apply(null, parsed.rows.map(function (r) { return r.length; }));
     var opts = [];
-    for (var i = 0; i < anzahl; i++) {
-      var name = hatH && header[i] != null && String(header[i]).trim() !== '' ? String(header[i]).trim() : 'Spalte ' + (i + 1);
-      opts.push({ idx: i, name: name });
-    }
+    for (var i = 0; i < anzahl; i++) opts.push({ idx: i, name: (hatH && header[i] != null && String(header[i]).trim() !== '') ? String(header[i]).trim() : 'Spalte ' + (i + 1) });
     return opts;
   }
-
-  var FELD_LABELS = { anrede: 'Anrede', vorname: 'Vorname', nachname: 'Nachname', email: 'Email', block: 'Block', platz: 'Platz' };
-
   function baueMappingUI() {
-    var box = $('mapping');
-    box.innerHTML = '';
-    var opts = spaltenOptionen();
+    var box = $('mapping'); box.innerHTML = ''; var opts = spaltenOptionen();
     TG.FELDER.forEach(function (f) {
       var wrap = document.createElement('div');
-      var lab = document.createElement('label'); lab.textContent = FELD_LABELS[f]; wrap.appendChild(lab);
-      var sel = document.createElement('select'); sel.dataset.feld = f;
+      var lab = document.createElement('label'); lab.textContent = TG.FELD_LABELS[f]; wrap.appendChild(lab);
+      var sel = document.createElement('select');
       var none = document.createElement('option'); none.value = '-1'; none.textContent = '(nicht zugeordnet)'; sel.appendChild(none);
-      opts.forEach(function (o) {
-        var op = document.createElement('option'); op.value = String(o.idx); op.textContent = o.name; sel.appendChild(op);
-      });
+      opts.forEach(function (o) { var op = document.createElement('option'); op.value = String(o.idx); op.textContent = o.name; sel.appendChild(op); });
       sel.value = String(mapping[f]);
-      sel.addEventListener('change', function () {
-        mapping[f] = parseInt(sel.value, 10);
-        aktualisiere();
-      });
-      wrap.appendChild(sel);
-      box.appendChild(wrap);
+      sel.addEventListener('change', function () { mapping[f] = parseInt(sel.value, 10); aktualisiere(); });
+      wrap.appendChild(sel); box.appendChild(wrap);
     });
   }
-
   $('hatHeader').addEventListener('change', function () { baueMappingUI(); aktualisiere(); });
 
   function aktualisiere() {
     records = TG.datensaetzeAusRows(parsed.rows, mapping, $('hatHeader').checked);
     zeigeVorschauTabelle();
-    var anzahl = records.length;
-    $('go').disabled = anzahl === 0;
-    $('vorschauBtn').disabled = anzahl === 0;
+    $('go').disabled = records.length === 0;
     aktualisiereKarte();
   }
-
   function zeigeVorschauTabelle() {
-    var box = $('preview');
-    box.innerHTML = '';
+    var box = $('preview'); box.innerHTML = '';
     if (!records.length) { box.innerHTML = '<p class="hinweis">Keine Datensätze.</p>'; return; }
     var info = document.createElement('p'); info.className = 'hinweis';
-    info.textContent = records.length + ' Person(en) erkannt. Vorschau der ersten Zeilen:';
+    var tpp = parseInt($('ticketsProPerson').value, 10) || 1;
+    info.textContent = records.length + ' Person(en) → ' + (records.length * tpp) + ' Ticket(s). Vorschau der ersten Zeilen:';
     box.appendChild(info);
-    var t = document.createElement('table');
-    var thead = document.createElement('tr');
-    TG.FELDER.forEach(function (f) { var th = document.createElement('th'); th.textContent = FELD_LABELS[f]; thead.appendChild(th); });
+    var t = document.createElement('table'); var thead = document.createElement('tr');
+    TG.FELDER.forEach(function (f) { var th = document.createElement('th'); th.textContent = TG.FELD_LABELS[f]; thead.appendChild(th); });
     t.appendChild(thead);
-    records.slice(0, 6).forEach(function (r) {
-      var tr = document.createElement('tr');
-      TG.FELDER.forEach(function (f) { var td = document.createElement('td'); td.textContent = r[f]; tr.appendChild(td); });
-      t.appendChild(tr);
-    });
+    records.slice(0, 6).forEach(function (r) { var tr = document.createElement('tr'); TG.FELDER.forEach(function (f) { var td = document.createElement('td'); td.textContent = r[f]; tr.appendChild(td); }); t.appendChild(tr); });
     box.appendChild(t);
-    // Warnung bei fehlenden E-Mails
-    var ohneMail = records.filter(function (r) { return !r.email; }).length;
-    if (ohneMail) {
-      var w = document.createElement('p'); w.className = 'hinweis';
-      w.style.color = '#a02617';
-      w.textContent = 'Hinweis: ' + ohneMail + ' Person(en) ohne E-Mail — diese Zeilen im Versand-Manifest bleiben leer.';
-      box.appendChild(w);
-    }
   }
 
-  /* ---------- Karten-Vorschau ---------- */
-  function aktualisiereKarte() {
-    var cfg = cfgAusForm();
-    var r = records[0] || { anrede: '', vorname: 'Vorname', nachname: 'Nachname', block: '', platz: '' };
-    $('k_anlass').textContent = cfg.anlass || 'Anlass';
-    $('k_meta').textContent = [cfg.datum, cfg.uhrzeit, cfg.ort].filter(Boolean).join(' · ');
-    $('k_name').textContent = [r.anrede, r.vorname, r.nachname].filter(Boolean).join(' ') || '—';
-    var bp = [];
-    if (r.block) bp.push('Block ' + r.block);
-    if (r.platz) bp.push('Platz ' + r.platz);
-    $('k_bp').textContent = bp.join(' · ');
-    $('k_fuss').textContent = cfg.fusszeile || '';
-    // QR-Vorschau aus einem Beispiel-Token (rein optisch; im PDF steht das echte Token)
-    try {
-      var qr = qrcode(0, cfg.qrFehlerkorrektur); qr.addData(records[0] ? 'VORSCHAU' : 'BEISPIEL'); qr.make();
-      $('k_qr').src = qr.createDataURL(4, 8);
-    } catch (e) { /* ignore */ }
+  /* ---------- Vorschau-Karte (mm * 2.83 = px bei 600px Breite) ---------- */
+  var K = 600 / 212;
+  function setOv(el, xmm, ymm, opt) {
+    el.style.left = (xmm * K) + 'px'; el.style.top = (ymm * K) + 'px';
+    if (opt && opt.w != null) el.style.width = (opt.w * K) + 'px';
+    if (opt && opt.h != null) el.style.height = (opt.h * K) + 'px';
+    if (opt && opt.size != null) el.style.fontSize = opt.size + 'px';
+    if (opt && opt.bold) el.style.fontWeight = '700'; else if (opt) el.style.fontWeight = '400';
   }
-  ['f_anlass', 'f_datum', 'f_uhrzeit', 'f_ort', 'f_fuss', 'f_ec'].forEach(function (id) {
-    $(id).addEventListener('input', aktualisiereKarte);
-    $(id).addEventListener('change', aktualisiereKarte);
-  });
-  $('vorschauBtn').addEventListener('click', aktualisiereKarte);
+  function aktualisiereKarte() {
+    var c = cfgAusForm();
+    var karte = $('karte'); if (ASSETS.front) karte.style.backgroundImage = 'url(' + ASSETS.front + ')';
+    setOv($('k_qrbox'), 5.1 - 2.4, 7.8 - 2.4, { w: 30 + 4.8, h: 30 + 4.8 });
+    try { var qr = qrcode(0, c.qrFehlerkorrektur); qr.addData('VORSCHAU-TOKEN-1234567890'); qr.make(); $('k_qr').src = qr.createDataURL(4, 0); } catch (e) {}
+    var r0 = records[0] || { anrede: '', vorname: 'Vorname', nachname: 'Nachname' };
+    var name = [r0.anrede, r0.vorname, r0.nachname].filter(Boolean).join(' ') || '—';
+    var tpp = parseInt($('ticketsProPerson').value, 10) || 1;
+    $('k_name').innerHTML = '<div>' + esc(name) + '</div><div>Ticket 1 / ' + tpp + '</div>';
+    setOv($('k_name'), 1.4, 39.5, { w: 37.4, size: 8.5, bold: true });
+    $('k_links').innerHTML = '<div style="font-weight:700">' + esc(c.linksTitel) + '</div>' + esc(c.linksZusatz) + '<br>' + esc(c.linksDatum) + '<br><br><b>' + esc(c.linksEinlass) + '</b>';
+    setOv($('k_links'), 0.7, 61, { w: 39.2, size: 8 });
+    $('k_datum').textContent = c.datumLang; setOv($('k_datum'), 106.9, 66, { w: 103, size: 11, bold: true });
+    $('k_anlass').textContent = c.anlass; setOv($('k_anlass'), 106.9, 75.8, { w: 103.7, size: 12, bold: true });
+    $('k_ort').textContent = c.ort; setOv($('k_ort'), 106.9, 92.1, { w: 103.7, size: 7.5, bold: true });
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]; }); }
   aktualisiereKarte();
 
   /* ---------- Erzeugen ---------- */
   $('go').addEventListener('click', function () {
     if (!records.length) return;
     var cfg = cfgAusForm();
-    if (!cfg.anlass) { meldung($('genstatus'), 'Bitte einen Anlass angeben.', 'fehler'); return; }
-
-    $('go').disabled = true; $('vorschauBtn').disabled = true; $('csvfile').disabled = true;
-    var bar = $('bar'), fill = $('barfill');
-    bar.style.display = 'block'; fill.style.width = '0%'; fill.textContent = '0%';
-    meldung($('genstatus'), 'Erzeuge ' + records.length + ' Ticket(s) …', 'info');
-
+    $('go').disabled = true; $('datei').disabled = true;
+    var bar = $('bar'), fill = $('barfill'); bar.style.display = 'block'; fill.style.width = '0%'; fill.textContent = '0%';
+    var tpp = cfg.ticketsProPerson;
+    meldung($('genstatus'), 'Erzeuge ' + (records.length * tpp) + ' Karte(n) …', 'info');
     var onProgress = function (fertig, gesamt) {
-      var pct = Math.round(fertig / gesamt * 100);
-      fill.style.width = pct + '%';
-      fill.textContent = fertig + ' / ' + gesamt;
-      // gelegentlich an den Browser zurückgeben, damit der Balken sichtbar läuft
-      if (fertig % 15 === 0 || fertig === gesamt) {
-        return new Promise(function (res) { requestAnimationFrame(function () { res(); }); });
-      }
+      var pct = Math.round(fertig / gesamt * 100); fill.style.width = pct + '%'; fill.textContent = fertig + ' / ' + gesamt;
+      if (fertig % 10 === 0 || fertig === gesamt) return new Promise(function (res) { requestAnimationFrame(function () { res(); }); });
     };
-
-    TG.baueAlles({
-      records: records, cfg: cfg, jsPDFCtor: jsPDF, JSZipCtor: JSZip, onProgress: onProgress
-    }).then(function (res) {
-      meldung($('genstatus'), 'Packe ZIP …', 'info');
-      return res.zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
-        function (m) { fill.textContent = 'ZIP ' + Math.round(m.percent) + '%'; });
-    }).then(function (blob) {
-      var name = 'tickets_' + new Date().toISOString().slice(0, 10) + '.zip';
-      downloadBlob(blob, name);
-      bar.style.display = 'none';
-      meldung($('genstatus'),
-        '✓ Fertig: ' + records.length + ' Ticket(s) erzeugt. ZIP „' + name + '" wurde heruntergeladen ' +
-        '(enthält die PDFs, tokens.json und versand_manifest.csv).', 'ok');
-    }).catch(function (err) {
-      bar.style.display = 'none';
-      meldung($('genstatus'), 'Fehler bei der Erzeugung: ' + (err && err.message ? err.message : err), 'fehler');
-    }).then(function () {
-      $('go').disabled = false; $('vorschauBtn').disabled = false; $('csvfile').disabled = false;
-    });
+    TG.baueAlles({ records: records, cfg: cfg, assets: ASSETS, jsPDFCtor: jsPDF, JSZipCtor: JSZip, onProgress: onProgress })
+      .then(function (res) { meldung($('genstatus'), 'Packe ZIP …', 'info'); return res.zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }, function (m) { fill.textContent = 'ZIP ' + Math.round(m.percent) + '%'; }); })
+      .then(function (blob) {
+        var name = 'eintrittskarten_' + new Date().toISOString().slice(0, 10) + '.zip';
+        downloadBlob(blob, name); bar.style.display = 'none';
+        meldung($('genstatus'), '✓ Fertig: ' + (records.length * tpp) + ' Karte(n). ZIP „' + name + '" heruntergeladen (PDFs, tokens.json, versand_manifest.csv).', 'ok');
+      })
+      .catch(function (err) { bar.style.display = 'none'; meldung($('genstatus'), 'Fehler: ' + (err && err.message ? err.message : err), 'fehler'); })
+      .then(function () { $('go').disabled = false; $('datei').disabled = false; });
   });
-
-  function downloadBlob(blob, name) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-  }
+  function downloadBlob(blob, name) { var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 4000); }
 })();
 </script>
 </body>

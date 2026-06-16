@@ -28,7 +28,11 @@
       map.set(t.token, {
         token: t.token,
         anrede: t.anrede || '', vorname: t.vorname || '', nachname: t.nachname || '',
-        email: t.email || '', block: t.block || '', platz: t.platz || ''
+        studienort: t.studienort || '', einstellungsjahr: t.einstellungsjahr || '',
+        studiengruppe: t.studiengruppe || '',
+        ticketNr: t.ticketNr || '', ticketAnzahl: t.ticketAnzahl || '',
+        // Abwärtskompatibel (alte tokens.json):
+        block: t.block || '', platz: t.platz || ''
       });
     }
     if (map.size === 0) throw new Error('Keine gültigen Tickets in der Datei gefunden.');
@@ -38,6 +42,19 @@
   function name(rec) {
     if (!rec) return '';
     return [rec.anrede, rec.vorname, rec.nachname].filter(Boolean).join(' ');
+  }
+  // Zusatzinfo-Zeile fürs Einlasspersonal
+  function detail(rec) {
+    if (!rec) return '';
+    var teile = [];
+    if (rec.ticketNr && rec.ticketAnzahl) teile.push('Ticket ' + rec.ticketNr + '/' + rec.ticketAnzahl);
+    if (rec.studiengruppe) teile.push('StGr ' + rec.studiengruppe);
+    if (rec.studienort) teile.push(rec.studienort);
+    if (rec.einstellungsjahr) teile.push(rec.einstellungsjahr);
+    // alte Felder
+    if (rec.block) teile.push('Block ' + rec.block);
+    if (rec.platz) teile.push('Platz ' + rec.platz);
+    return teile.join('   ·   ');
   }
 
   /* ---------- Prüflogik ---------------------------------------------
@@ -142,6 +159,7 @@
   /* ---------- Export ------------------------------------------------- */
   TS.ladeTokens = ladeTokens;
   TS.name = name;
+  TS.detail = detail;
   TS.pruefe = pruefe;
   TS.logToCsv = logToCsv;
   TS.parseCsv = parseCsv;

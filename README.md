@@ -1,160 +1,124 @@
-# Ticket-Scanner – Offline-System
+# Eintrittskarten – Polizeiakademie Niedersachsen (Offline)
 
 Zwei eigenständige HTML-Dateien für **Ausgabe** und **Einlasskontrolle** digitaler
 Eintrittskarten – **vollständig offline**, ohne Installation, ohne Internet, ohne
-externe Dienste. Gedacht für einen einzelnen, stark eingeschränkten Windows-PC:
-beide Dateien werden einfach **per Doppelklick** im Browser geöffnet.
+externe Dienste. Beide Dateien werden einfach **per Doppelklick** im Browser
+geöffnet (auch auf einem abgeschotteten Windows-PC).
 
 | Datei | Zweck |
 |---|---|
-| **`ticket-generator.html`** | Organisator: erzeugt aus einer CSV personalisierte Ticket-PDFs, `tokens.json` und ein Versand-Manifest (alles in einer ZIP). |
-| **`einlass-scanner.html`** | Einlass: scannt/prüft Codes gegen `tokens.json`, entwertet gültige Tickets, exportiert den Stand. |
-| `beispiel-teilnehmer.csv` | 10 Demozeilen zum Ausprobieren. |
+| **`ticket-generator.html`** | Organisator: liest die Teilnehmer-Liste (Excel/CSV) und erzeugt personalisierte Karten-PDFs (Vorder- + Rückseite) im Polizeiakademie-Design, dazu `tokens.json` und ein Versand-Manifest – alles in **einer ZIP**. |
+| **`einlass-scanner.html`** | Einlass: prüft Codes gegen `tokens.json`, entwertet gültige Tickets, exportiert den Stand. |
+| `beispiel-teilnehmer.csv` | 10 Demozeilen im Spalten-Layout der Gesamtliste. |
 
-Alle benötigten Bibliotheken (QR-Erzeugung, PDF, ZIP, Kamera-QR-Erkennung) sind als
-Quellcode **direkt in die HTML eingebettet**. Es gibt **keine** `<script src>`-Tags,
-keinen `fetch`-/Netzwerkzugriff und keine CDN-Aufrufe. Im DevTools-Netzwerk-Tab
-erscheint keine einzige externe Anfrage.
-
----
+Alle Bibliotheken (QR-Erzeugung, PDF, ZIP, Excel-Import, Kamera-QR-Erkennung) und
+die Karten-Hintergründe (aus der PowerPoint-Vorlage) sind als Quellcode bzw. Bild
+**direkt eingebettet**. Es gibt **keine** `<script src>`-Tags, keinen `fetch`-/
+Netzwerkzugriff, keine CDN-Aufrufe. Im DevTools-Netzwerk-Tab erscheint keine
+externe Anfrage.
 
 ## Bedienung in 5 Schritten
 
-1. **Teilnehmerliste vorbereiten.** Eine CSV mit den Spalten
-   `Anrede; Vorname; Nachname; Email; Block; Platz` (Trennzeichen `;` oder `,`,
-   UTF-8). Als Vorlage dient `beispiel-teilnehmer.csv`.
-2. **Tickets erzeugen.** `ticket-generator.html` doppelklicken → oben ggf.
-   Anlass/Datum/Ort anpassen → CSV auswählen → Spaltenzuordnung kurz prüfen →
-   **„Tickets erzeugen & ZIP herunterladen"**. Es entsteht eine ZIP mit je einem
-   A6-PDF pro Person, `tokens.json` und `versand_manifest.csv`.
-3. **PDFs versenden.** Die PDFs aus der ZIP per Mail verteilen. Das
-   `versand_manifest.csv` (`Email;Dateiname`) ordnet einem Outlook-Makro den
-   richtigen Anhang zu (siehe `outlook/SendTickets.bas`).
-4. **Scanner vorbereiten.** `einlass-scanner.html` am Einlass-PC doppelklicken
-   und **`tokens.json`** laden. `tokens.json` bleibt **lokal** und wird nur hier
-   gebraucht – niemals an die Gäste geben.
-5. **Einlass kontrollieren.** Code mit dem **USB-2D-Scanner** scannen (er tippt in
-   das Eingabefeld, `Enter` prüft) – oder über die Kamera, falls der Browser sie
-   freigibt. Ampel: **grün = gültig**, **gelb = bereits benutzt**, **rot =
-   ungültig**. Regelmäßig **„Stand sichern"** (CSV) klicken; nach einem Neustart
+1. **Generator öffnen.** `ticket-generator.html` doppelklicken. Oben unter
+   **„Anlass & Texte"** die passende **Vorlage** wählen (Abschlussfeier,
+   Vereidigung, Dienstbesprechung, Ernennung …) und Datum/Jahrgang/Ort
+   bei Bedarf anpassen.
+2. **Liste laden.** Die **Excel-Datei** (`.xlsx`, z. B. die Gesamtliste) oder eine
+   CSV auswählen. Bei Excel das **Tabellenblatt** wählen (Standard: erstes Blatt,
+   „ausgeplant" wird übersprungen). Die Spalten *Anrede, Name, Vorname, StO,
+   Einstellungsjahr, neue StGr* werden automatisch erkannt – Zuordnung kurz prüfen.
+3. **Karten erzeugen.** Tickets pro Person setzen (Standard 1), dann
+   **„Karten erzeugen & ZIP herunterladen"**. Es entsteht je ein PDF
+   (Vorder-/Rückseite) pro Ticket, plus `tokens.json` und `versand_manifest.csv`.
+4. **Versenden.** Die PDFs aus der ZIP entpacken und per Outlook-Makro
+   (`outlook/SendTickets.bas`) verschicken – der Dateiname
+   `Nachname, Vorname - Ticket 1von2.pdf` wird vom Makro automatisch der richtigen
+   Person zugeordnet.
+5. **Einlass kontrollieren.** `einlass-scanner.html` am Eingangs-PC öffnen,
+   **`tokens.json`** laden und Codes mit dem **USB-2D-Scanner** (oder der Kamera,
+   falls erlaubt) scannen. Ampel: **grün = gültig**, **gelb = bereits benutzt**,
+   **rot = ungültig**. Regelmäßig **„Stand sichern"** klicken; nach einem Neustart
    mit **„Stand laden"** fortsetzen.
 
-> **Wichtig (Datenhaltung):** Auf `file://` ist `localStorage` unzuverlässig. Der
-> Einlass-Stand wird daher nur **im Speicher** gehalten. Verlassen Sie sich nicht
-> darauf – sichern Sie den Stand regelmäßig als Datei (der Scanner erinnert
-> automatisch alle 25 Scans daran).
-
----
+> **Datenhaltung:** Auf `file://` ist `localStorage` unzuverlässig. Der
+> Einlass-Stand bleibt nur **im Speicher** – daher regelmäßig als Datei sichern
+> (der Scanner erinnert automatisch alle 25 Scans).
 
 ## ticket-generator.html
 
-- **Eingabe:** CSV per Datei-Auswahl. Trennzeichen (`;`/`,`/Tab) und UTF-8 werden
-  automatisch erkannt; ein UTF-8-BOM wird entfernt. Die Spalten werden anhand der
-  Überschrift automatisch zugeordnet und können in der Oberfläche korrigiert werden.
-- **Token:** pro Zeile ein zufälliges, nicht erratbares Token (16 Byte aus
-  `crypto.getRandomValues` → base64url, 22 Zeichen).
-- **QR-Code:** lokal erzeugt; Inhalt ist **ausschließlich das Token** – keine
-  personenbezogenen Daten im QR.
-- **PDF:** A6-Karte mit Anlass/Datum/Ort, Name, Block + Platz und QR. Der QR wird
-  als gestochen scharfe Vektorgrafik gezeichnet (gut scanbar im Druck).
-- **Ausgabe (eine ZIP):**
-  - je ein PDF pro Person (Dateiname-Muster konfigurierbar, Standard enthält
-    Nachname/Vorname/Email),
-  - `tokens.json` – alle gültigen Tickets `{token, anrede, vorname, nachname,
-    email, block, platz}` (nur für den Scanner),
-  - `versand_manifest.csv` – `Email;Dateiname`.
-- **Fortschrittsanzeige** auch bei ~1.000 PDFs; läuft komplett im Browser.
+- **Eingabe:** Excel (`.xlsx`/`.xls`, SheetJS eingebettet) mit Blattauswahl, oder
+  CSV (Trennzeichen `;`/`,`/Tab automatisch). Spalten der Gesamtliste werden per
+  Synonym automatisch zugeordnet (`Name` → Nachname, `StO` → Studienort,
+  `neue StGr` → Studiengruppe); manuell korrigierbar.
+- **Token:** pro Ticket ein zufälliges, nicht erratbares Token (16 Byte aus
+  `crypto.getRandomValues` → base64url). QR-Inhalt = **nur das Token**.
+- **Karte (PDF):** A6-Querformat (212 × 100 mm), Vorder- + Rückseite im
+  Original-Design (Hintergrund aus der PPTX-Vorlage). Aufdruck: QR + Name +
+  „Ticket k/N" auf dem Abriss links, Anlass/Datum/Ort rechts.
+- **Mehrere Tickets pro Person:** durchnummeriert `1/N … N/N`, jedes mit eigenem
+  Token und eigener PDF-Datei.
+- **Ausgabe (eine ZIP):** je ein PDF pro Ticket, `tokens.json`
+  `{token, anrede, vorname, nachname, studienort, einstellungsjahr,
+  studiengruppe, ticketNr, ticketAnzahl}` (nur für den Scanner) und
+  `versand_manifest.csv` (`Nachname;Vorname;TicketNr;Anzahl;Dateiname`).
+- **Fortschrittsanzeige** auch bei vielen Hundert Karten.
 
 ## einlass-scanner.html
 
-- **Liste laden:** `tokens.json` per Datei-Auswahl.
-- **Zwei Eingabewege:**
-  1. **USB-2D-Scanner als Tastatur** (robuster Standardweg): Code landet im
-     Eingabefeld, `Enter` prüft. Das Feld bleibt automatisch fokussiert.
-  2. **Kamera** (eingebettete QR-Erkennung), falls der Browser sie erlaubt –
-     sonst sauberer Hinweis und Rückfall auf den Scanner-Modus.
-- **Prüflogik:**
-  - in Liste + noch nicht benutzt → **grün „Gültig"** + Name/Block/Platz, danach
-    als benutzt markiert (mit Zeitstempel),
-  - in Liste + schon benutzt → **gelb „Bereits benutzt"** + letzte Einlasszeit,
-  - nicht in Liste → **rot „Ungültig"**.
-- **Zähler** „Eingecheckt: X / Gesamt", Verlauf der letzten Scans, akustisches/
-  haptisches Feedback.
-- **„Stand sichern"** → Einlass-Log als CSV (`token; name; zeit; ergebnis`).
-  **„Stand laden"** → Log wieder importieren (Wiederaufnahme nach Neustart; mehrere
-  Logs werden zusammengeführt, Dubletten entfernt). Automatischer Hinweis alle 25
-  Scans.
-
----
+- `tokens.json` laden. Zwei Eingabewege: **USB-2D-Scanner** (Tastatur, Enter prüft –
+  Standardweg) und **Kamera** (falls vom Browser erlaubt, sonst sauberer Fallback).
+- Prüflogik: gültig → **grün** + Name, Ticket-Nr., Studiengruppe/Studienort;
+  schon benutzt → **gelb** + letzte Einlasszeit; nicht in Liste → **rot**.
+- Zähler „Eingecheckt: X / Gesamt", Verlauf, Ton/Vibration. **Stand sichern/laden**
+  als CSV (`token;name;zeit;ergebnis`) zur Wiederaufnahme; Hinweis alle 25 Scans.
 
 ## Konfigurieren
 
-### Anlass / Datum / Ort (und Ticket-Design)
-Am Anfang des `<script>`-Blocks in **`ticket-generator.html`** steht der Block
-`KONSTANTEN` (Anlass, Datum, Uhrzeit, Ort, Fußzeile, QR-Fehlerkorrektur,
-Dateiname-Muster, Farbe). Diese Werte sind die Standardvorgaben; in der Oberfläche
-lassen sie sich pro Lauf überschreiben.
+- **Anlass/Datum/Ort:** in der Oberfläche unter „Anlass & Texte" (Vorlagen +
+  freie Felder). Neue Vorlagen: im `<script>`-Block von
+  `src/ticket-generator.template.html` das Objekt `VORLAGEN` ergänzen.
+- **Spalten:** Standard ist das Gesamtlisten-Layout; weitere Überschriften über
+  die Synonym-Listen in `src/core-generator.js` (`SYNONYME`) ergänzbar.
+- **Karten-Design austauschen:** Hintergrundbilder in `src/assets/front.jpg`
+  (neutrale Vorderseite) und `src/assets/back.jpg` (Rückseite) ersetzen; die
+  Textpositionen stehen klar markiert in `zeichneFront()` in
+  `src/core-generator.js` (Maße in mm, direkt aus der `.pptx` übernommen). Danach
+  neu bauen (siehe unten).
 
-### CSV-Spalten
-Standard: `Anrede, Vorname, Nachname, Email, Block, Platz`. Andere Überschriften
-werden über Synonyme erkannt (z. B. „Name" → Nachname, „E-Mail" → Email). Stimmt die
-automatische Zuordnung nicht, kann sie in der Oberfläche per Auswahlfeld korrigiert
-werden.
+## Sicherheit
 
-### Ticket-Design ändern
-Das Layout ist an **zwei klar markierten Stellen** hinterlegt und sollte parallel
-angepasst werden:
-- **PDF:** Funktion `zeichneTicket(doc, rec, cfg)` in `src/core-generator.js`
-  (Maße in mm, A6 = 105 × 148).
-- **HTML-Vorschau:** der Block `<!-- VORLAGE: HTML-Karte -->` samt CSS-Klassen
-  `.karte …` in `src/ticket-generator.template.html`.
+Fälschungsschutz über **zufällige 128-Bit-Token** + **Mitgliedschaftsprüfung** gegen
+`tokens.json`: nur enthaltene Tokens sind gültig, Tokens sind praktisch nicht
+erratbar, der QR enthält keine personenbezogenen Daten. `tokens.json` bleibt
+vertraulich (nur am Einlass-PC).
 
-Nach Änderungen an `src/…` die Dateien neu bauen (siehe unten). Wer nur Texte/Farben
-in der fertigen `ticket-generator.html` anpassen will, kann den `KONSTANTEN`-Block
-und die `zeichneTicket`-Funktion auch direkt dort suchen.
+## Hinweise
 
----
-
-## Sicherheit / Fälschungsschutz
-
-Tickets sind durch **zufällige 128-Bit-Token** + **Mitgliedschaftsprüfung gegen die
-Liste** abgesichert: Nur Tokens, die in `tokens.json` stehen, sind gültig; Tokens
-sind praktisch nicht erratbar. Der QR enthält keine personenbezogenen Daten. Eine
-optionale HMAC-Signatur ist nicht nötig, solange `tokens.json` vertraulich bleibt
-(nur am Einlass-PC).
-
-## Hinweise / Fehlerbehebung
-
-- **Kamera bleibt grau / „nicht verfügbar":** Beim Öffnen per Doppelklick
-  (`file://`) geben viele Browser die Kamera nicht frei – das ist erwartet. Der
+- **Kamera per Doppelklick (`file://`)** wird von vielen Browsern gesperrt – der
   **USB-2D-Scanner** ist der vorgesehene, immer funktionierende Weg.
-- **Falsche/leere CSV oder JSON:** Beide Tools zeigen klare deutsche Fehlermeldungen.
-- **Umlaute:** Die PDFs unterstützen deutsche Umlaute/ß. CSV bitte als **UTF-8**
-  speichern.
+- Excel bitte als normale `.xlsx` speichern; CSV als **UTF-8**.
 
----
+## Neu bauen (für Entwickler)
 
-## Neu bauen (optional, für Entwickler)
-
-Die fertigen Dateien `ticket-generator.html` und `einlass-scanner.html` sind
-eingecheckt und sofort lauffähig. Wer Quellen oder Bibliotheken ändert, baut sie neu:
+Die fertigen Dateien sind eingecheckt und sofort lauffähig. Nach Änderungen an
+`src/…`, `vendor/…` oder `src/assets/…`:
 
 ```
-node build.mjs          # bettet vendor/ + src/core-*.js in die Vorlagen ein
-node test/test-core.mjs  # 48 Tests der reinen Logik (ohne Zusatzpakete)
+node build.mjs           # bettet vendor + assets + src/core-*.js in die HTML ein
+node test/test-core.mjs  # Logik-Tests (ohne Zusatzpakete)
 ```
-
-Aufbau des Quellbaums:
 
 | Ordner/Datei | Inhalt |
 |---|---|
-| `vendor/` | eingebettete Bibliotheken: qrcode-generator, jsPDF, JSZip, jsQR (+ `LIZENZEN.md`) |
-| `src/core-generator.js`, `src/core-scanner.js` | reine Logik (im Browser **und** in den Tests genutzt) |
+| `vendor/` | eingebettete Libs: qrcode-generator, jsPDF, JSZip, jsQR, xlsx (mini) |
+| `src/assets/` | Karten-Hintergründe (front/back) aus der PowerPoint-Vorlage |
+| `src/core-generator.js`, `src/core-scanner.js` | reine Logik (Browser **und** Tests) |
 | `src/*.template.html` | Oberflächen mit `<!--INLINE:…-->`-Markern |
-| `build.mjs` | fügt alles zu den zwei eigenständigen HTML zusammen und prüft auf externe Referenzen |
-| `test/test-core.mjs` | Token-, CSV-, Mapping-, PDF/ZIP-, QR-Round-Trip- und Prüflogik-Tests |
+| `build.mjs` | fügt alles zu zwei eigenständigen HTML zusammen, prüft auf externe Referenzen |
 
-Bibliotheken: qrcode-generator (MIT), jsPDF (MIT), JSZip (MIT/GPLv3), jsQR (Apache-2.0).
+Bibliotheken: qrcode-generator (MIT), jsPDF (MIT), JSZip (MIT/GPLv3), jsQR
+(Apache-2.0), SheetJS/xlsx (Apache-2.0). Karten-Design/Logo: Polizeiakademie
+Niedersachsen.
 
 ---
 ---

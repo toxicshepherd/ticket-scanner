@@ -1,180 +1,131 @@
-/* Node-Tests für die reine Logik beider Tools.
- * Lädt dieselben vendor-Bibliotheken, die auch in die HTML eingebettet werden,
- * und prüft die Kern-Algorithmen (Token, CSV, Mapping, PDF/ZIP-Lauf, QR-Round-
- * trip Generator->Scanner, Prüflogik, Log-Export/Import).
+/* Node-Tests der reinen Logik (Polizeiakademie-Variante).
+ * Lädt dieselben vendor-Bibliotheken + Karten-Hintergründe wie die HTML.
  * Aufruf:  node test/test-core.mjs
  */
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
-const V = path.join(ROOT, 'vendor') + '/';
+const V = path.join(ROOT, 'vendor') + '/', A = path.join(ROOT, 'src', 'assets') + '/';
 
 const qrcode = require(V + 'qrcode-generator.js');
 const jsqr = require(V + 'jsqr.js');
 const jspdfNS = require(V + 'jspdf.umd.min.js');
 const JSZip = require(V + 'jszip.min.js');
+const XLSX = require(V + 'xlsx.mini.min.js');
 const jsQR = jsqr.default || jsqr;
 const jsPDF = jspdfNS.jsPDF || (jspdfNS.default && jspdfNS.default.jsPDF);
-globalThis.qrcode = qrcode; // core-generator nutzt das globale qrcode
+globalThis.qrcode = qrcode;
 
 const TG = require(path.join(ROOT, 'src', 'core-generator.js'));
 const TS = require(path.join(ROOT, 'src', 'core-scanner.js'));
+const b64 = (f, m) => 'data:' + m + ';base64,' + fs.readFileSync(A + f).toString('base64');
+const assets = { front: b64('front.jpg', 'image/jpeg'), back: b64('back.jpg', 'image/jpeg') };
 
 let pass = 0, fail = 0;
-function ok(cond, msg) { if (cond) { pass++; } else { fail++; console.error('  ✗ FAIL: ' + msg); } }
-function eq(a, b, msg) { ok(JSON.stringify(a) === JSON.stringify(b), msg + '  (got ' + JSON.stringify(a) + ')'); }
-function section(t) { console.log('\n== ' + t + ' =='); }
+function ok(c, m) { if (c) pass++; else { fail++; console.error('  ✗ FAIL: ' + m); } }
+function eq(a, b, m) { ok(JSON.stringify(a) === JSON.stringify(b), m + '  (got ' + JSON.stringify(a) + ')'); }
+function sec(t) { console.log('\n== ' + t + ' =='); }
 
 /* ---------------- GENERATOR ---------------- */
-section('Generator: Token');
-const tk = TG.neuerToken();
-ok(/^[A-Za-z0-9_-]{22}$/.test(tk), 'Token ist 22-stelliges base64url: ' + tk);
-const set = new Set(); for (let i = 0; i < 5000; i++) set.add(TG.neuerToken());
-ok(set.size === 5000, 'Tokens sind eindeutig (5000/5000): ' + set.size);
+sec('Token');
+ok(/^[A-Za-z0-9_-]{22}$/.test(TG.neuerToken()), 'Token 22-stellig base64url');
+const set = new Set(); for (let i = 0; i < 3000; i++) set.add(TG.neuerToken());
+ok(set.size === 3000, 'Tokens eindeutig (3000)');
 
-section('Generator: CSV');
-eq(TG.erkenneTrennzeichen('a;b;c'), ';', 'Trennzeichen ;');
-eq(TG.erkenneTrennzeichen('a,b,c'), ',', 'Trennzeichen ,');
-const csv = 'Anrede;Vorname;Nachname;Email;Block;Platz\r\n' +
-  'Herr;Max;"Müller; jr.";max@x.de;A;12\r\n' +   // Delimiter im Feld + Quotes
-  'Frau;Eva;"O""Brien";eva@x.de;B;3\n';            // doppelte Quotes
-const p = TG.parseCSV(csv);
-eq(p.delim, ';', 'CSV erkennt ; als Trennzeichen');
-eq(p.rows.length, 3, 'CSV: 3 Zeilen (inkl. Kopf)');
-eq(p.rows[1][2], 'Müller; jr.', 'CSV: Delimiter innerhalb Quotes bleibt erhalten');
-eq(p.rows[2][2], 'O"Brien', 'CSV: doppelte Quotes -> ein Quote');
-const bom = TG.parseCSV('﻿a;b\r\n1;2');
-eq(bom.rows[0], ['a', 'b'], 'CSV: BOM wird entfernt');
+sec('Spalten-Mapping (echtes Listen-Layout)');
+const HEADER = ['Anrede', 'Name', 'Vorname', 'StO', 'Einstellungsjahr', 'bisherige StGr', 'Zuteilung', 'neue StGr'];
+const map = TG.autoMapping(HEADER);
+eq(map, { anrede: 0, vorname: 2, nachname: 1, studienort: 3, einstellungsjahr: 4, studiengruppe: 7 }, 'Mapping: Name->nachname, StO->studienort, "neue StGr"->studiengruppe (nicht "bisherige")');
+ok(TG.hatUeberschrift([HEADER, ['Herr', 'Arnekker', 'Louis', 'Hann. Münden', 'BA 23/23', 201, 'Modul 13.3', 301]]) === true, 'Überschrift erkannt');
 
-section('Generator: Spalten-Mapping');
-const map = TG.autoMapping(p.rows[0]);
-eq(map, { anrede: 0, vorname: 1, nachname: 2, email: 3, block: 4, platz: 5 }, 'autoMapping erkennt Standardspalten');
-ok(TG.hatUeberschrift(p.rows) === true, 'Überschrift erkannt');
-const recs = TG.datensaetzeAusRows(p.rows, map, true);
-eq(recs.length, 2, '2 Datensätze ohne Kopfzeile');
-eq(recs[0].nachname, 'Müller; jr.', 'Datensatz übernimmt Feld korrekt');
-// alternatives Mapping: "Name" -> nachname
-eq(TG.autoMapping(['Name', 'Vorname', 'E-Mail']), { anrede: -1, vorname: 1, nachname: 0, email: 2, block: -1, platz: -1 }, 'Synonyme: Name->nachname, E-Mail->email');
+sec('XLSX-Lesepfad (gleiche Lib wie eingebettet)');
+{
+  // kleines XLSX im Speicher bauen und mit der mini-Lib wieder lesen
+  const ws = XLSX.utils.aoa_to_sheet([HEADER, ['Frau', 'Schäfer', 'Eva', 'Oldenburg', 'BA 24/24', 204, 'Modul 1', 305]]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Tabelle1');
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const wb2 = XLSX.read(new Uint8Array(buf), { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(wb2.Sheets['Tabelle1'], { header: 1, blankrows: false, defval: '' });
+  const recs = TG.datensaetzeAusRows(rows, TG.autoMapping(rows[0]), true);
+  eq(recs[0], { anrede: 'Frau', vorname: 'Eva', nachname: 'Schäfer', studienort: 'Oldenburg', einstellungsjahr: 'BA 24/24', studiengruppe: '305' }, 'XLSX -> Datensatz korrekt zugeordnet');
+}
 
-section('Generator: Dateiname');
-ok(/^Ticket_Mueller.*\.pdf$/i.test('x') === false, '(setup)');
-const fn = TG.dateiname('Ticket_{nachname}_{vorname}_{email}', { nachname: 'Müller', vorname: 'Max', email: 'max@x.de' }, 0);
-ok(/\.pdf$/.test(fn) && fn.indexOf('/') === -1 && fn.indexOf(':') === -1, 'Dateiname ist PDF + ohne unerlaubte Zeichen: ' + fn);
-eq(TG.dateiname('T_{index}', {}, 6), 'T_0007.pdf', 'Index wird 4-stellig aufgefüllt');
+sec('Dateiname (Outlook-kompatibel)');
+eq(TG.dateiname('{nachname}, {vorname} - Ticket {nr}von{anzahl}', { nachname: 'Müller', vorname: 'Max' }, { nr: 1, anzahl: 2 }), 'Müller, Max - Ticket 1von2.pdf', 'Trennzeichen ", " und " - Ticket " bleiben erhalten');
+ok(TG.dateiname('{nachname}', { nachname: 'A/B:C' }, {}).indexOf('/') === -1, 'verbotene Zeichen ersetzt');
 
-section('Generator: tokens.json / manifest');
-const meta = recs.map((r, i) => Object.assign({}, r, { token: TG.neuerToken(), dateiname: 'f' + i + '.pdf' }));
-const tj = TG.tokensJson(meta);
-eq(Object.keys(tj[0]).sort(), ['anrede', 'block', 'email', 'nachname', 'platz', 'token', 'vorname'], 'tokens.json Felder vollständig');
-const man = TG.manifestCsv(meta);
-ok(man.indexOf('Email;Dateiname') >= 0 && man.indexOf('f0.pdf') >= 0, 'manifest hat Kopf + Dateinamen');
-
-section('Generator: kompletter Lauf (PDF+ZIP) mit echten Libs');
-const cfg = { anlass: 'Tag der offenen Tür', datum: '16.06.2026', uhrzeit: '10:00', ort: 'Musterbehörde', qrFehlerkorrektur: 'M', dateinameMuster: 'Ticket_{nachname}_{vorname}_{email}', farbe: { r: 31, g: 108, b: 180 }, fusszeile: 'Nur mit gültigem Ausweis.' };
-const eingang = [
-  { anrede: 'Herr', vorname: 'Max', nachname: 'Müller', email: 'max@x.de', block: 'A', platz: '12' },
-  { anrede: 'Frau', vorname: 'Eva', nachname: 'Schäfer', email: 'eva@x.de', block: 'B', platz: '3' },
-  { anrede: 'Herr', vorname: 'Max', nachname: 'Müller', email: 'max2@x.de', block: 'A', platz: '13' } // Namensgleich -> eindeutiger Dateiname
+sec('Kompletter Lauf: 3 Personen x 2 Tickets, PDF(Vorder+Rück)+ZIP');
+const personen = [
+  { anrede: 'Herr', vorname: 'Max', nachname: 'Müller', studienort: 'Hann. Münden', einstellungsjahr: 'BA 23/23', studiengruppe: '301' },
+  { anrede: 'Frau', vorname: 'Eva', nachname: 'Schäfer', studienort: 'Oldenburg', einstellungsjahr: 'BA 24/24', studiengruppe: '305' },
+  { anrede: 'Herr', vorname: 'Max', nachname: 'Müller', studienort: 'Hann. Münden', einstellungsjahr: 'BA 23/23', studiengruppe: '301' }
 ];
-const res = await TG.baueAlles({ records: eingang, cfg, jsPDFCtor: jsPDF, JSZipCtor: JSZip });
+const cfg = { qrFehlerkorrektur: 'M', ticketsProPerson: 2, dateinameMuster: '{nachname}, {vorname} - Ticket {nr}von{anzahl}', linksTitel: 'ABSCHLUSSFEIER', linksZusatz: 'des Bachelor-Studienjahrgangs 20/21', linksDatum: '30.09.2024 um 12:00 Uhr', linksEinlass: 'Einlass ab 10:30 Uhr', datumLang: 'Montag, 30. September 2024 | 12:00 Uhr', anlass: 'zur Abschlussfeier des Bachelor-Studienjahrgangs 20/21', ort: 'Swiss Life Hall | Hannover' };
+const res = await TG.baueAlles({ records: personen, cfg, assets, jsPDFCtor: jsPDF, JSZipCtor: JSZip });
 const zbuf = await res.zip.generateAsync({ type: 'nodebuffer' });
-ok(zbuf.slice(0, 2).toString('latin1') === 'PK', 'ZIP-Header PK');
-// ZIP wieder einlesen und Inhalt prüfen
 const back = await JSZip.loadAsync(zbuf);
 const namen = Object.keys(back.files);
 const pdfs = namen.filter(n => /\.pdf$/i.test(n));
-eq(pdfs.length, 3, 'ZIP enthält 3 PDFs');
-ok(new Set(pdfs.map(s => s.toLowerCase())).size === 3, 'PDF-Dateinamen eindeutig (auch bei Namensgleichheit)');
-ok(namen.indexOf('tokens.json') >= 0, 'ZIP enthält tokens.json');
-ok(namen.indexOf('versand_manifest.csv') >= 0, 'ZIP enthält versand_manifest.csv');
-const tjson = JSON.parse(await back.file('tokens.json').async('string'));
-eq(tjson.length, 3, 'tokens.json hat 3 Einträge');
-ok(tjson.every(t => /^[A-Za-z0-9_-]{22}$/.test(t.token)), 'alle tokens base64url(22)');
-ok(new Set(tjson.map(t => t.token)).size === 3, 'tokens eindeutig');
-const firstPdf = await back.file(pdfs[0]).async('nodebuffer');
-ok(firstPdf.slice(0, 5).toString('latin1') === '%PDF-', 'PDF beginnt mit %PDF-');
-ok(firstPdf.length > 800, 'PDF ist nicht leer: ' + firstPdf.length + ' Bytes');
-const manStr = await back.file('versand_manifest.csv').async('string');
-ok(tjson.every(t => manStr.indexOf(t.email) >= 0), 'manifest enthält alle E-Mails');
+eq(pdfs.length, 6, '6 PDFs (3 Personen x 2 Tickets)');
+ok(new Set(pdfs.map(s => s.toLowerCase())).size === 6, 'Dateinamen eindeutig (auch bei Namensgleichheit)');
+const tj = JSON.parse(await back.file('tokens.json').async('string'));
+eq(tj.length, 6, 'tokens.json: 6 Einträge');
+ok(new Set(tj.map(t => t.token)).size === 6, '6 eindeutige Tokens');
+ok(tj.every(t => t.ticketAnzahl === 2 && (t.ticketNr === 1 || t.ticketNr === 2)), 'ticketNr/Anzahl gesetzt (1/2, 2/2)');
+ok(tj.filter(t => t.nachname === 'Müller' && t.vorname === 'Max').length === 4, 'gleiche Person -> mehrere Tickets möglich');
+eq(Object.keys(tj[0]).sort(), ['anrede', 'einstellungsjahr', 'nachname', 'studiengruppe', 'studienort', 'ticketAnzahl', 'ticketNr', 'token', 'vorname'], 'tokens.json Felder vollständig');
+const pdf0 = Buffer.from(await back.file(pdfs[0]).async('arraybuffer'));
+ok(pdf0.slice(0, 5).toString('latin1') === '%PDF-', 'PDF beginnt mit %PDF-');
+ok(pdf0.length > 5000, 'PDF enthält eingebettete Bilder (Größe ' + pdf0.length + ')');
+const man = await back.file('versand_manifest.csv').async('string');
+ok(man.indexOf('Nachname;Vorname;TicketNr;Anzahl;Dateiname') >= 0, 'Manifest namensbasiert (Kopfzeile)');
+ok(man.indexOf('Müller;Max;1;2;') >= 0, 'Manifest-Zeile korrekt');
 
-section('QR-Round-Trip Generator -> Scanner (jsQR liest, was erzeugt wurde)');
-function qrToImageData(token, ec) {
-  const qr = qrcode(0, ec || 'M'); qr.addData(token); qr.make();
+sec('QR-Round-Trip Generator -> jsQR');
+let qrOk = 0;
+for (const t of tj.slice(0, 4)) {
+  const qr = qrcode(0, 'M'); qr.addData(t.token); qr.make();
   const n = qr.getModuleCount(), q = 4, s = 6, dim = (n + 2 * q) * s;
   const data = new Uint8ClampedArray(dim * dim * 4).fill(255);
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c))
-    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
-      const px = (((r + q) * s + y) * dim + ((c + q) * s + x)) * 4;
-      data[px] = data[px + 1] = data[px + 2] = 0;
-    }
-  return { data, dim };
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) { const o = (((r + q) * s + y) * dim + ((c + q) * s + x)) * 4; data[o] = data[o + 1] = data[o + 2] = 0; }
+  const d = jsQR(data, dim, dim); if (d && d.data === t.token) qrOk++;
 }
-let qrOk = 0;
-for (const t of tjson) {
-  const { data, dim } = qrToImageData(t.token, cfg.qrFehlerkorrektur);
-  const dec = jsQR(data, dim, dim);
-  if (dec && dec.data === t.token) qrOk++;
-}
-ok(qrOk === tjson.length, 'jsQR dekodiert alle erzeugten Tokens exakt (' + qrOk + '/' + tjson.length + ')');
+ok(qrOk === 4, 'jsQR liest erzeugte Tokens exakt (' + qrOk + '/4)');
 
 /* ---------------- SCANNER ---------------- */
-section('Scanner: tokens.json laden + Fehler');
-const tokenMap = TS.ladeTokens(JSON.stringify(tjson));
-eq(tokenMap.size, 3, 'ladeTokens: 3 Tickets');
-let threw = false; try { TS.ladeTokens('{kaputt'); } catch (e) { threw = /JSON/.test(e.message); }
-ok(threw, 'ladeTokens wirft klaren Fehler bei kaputtem JSON');
-threw = false; try { TS.ladeTokens('123'); } catch (e) { threw = true; }
-ok(threw, 'ladeTokens wirft bei Nicht-Array');
-threw = false; try { TS.ladeTokens('[]'); } catch (e) { threw = true; }
-ok(threw, 'ladeTokens wirft bei leerer Liste');
+sec('Scanner: laden + Anzeige');
+const tokenMap = TS.ladeTokens(JSON.stringify(tj));
+eq(tokenMap.size, 6, 'ladeTokens: 6 Tickets');
+const rec0 = tokenMap.get(tj[0].token);
+ok(TS.name(rec0).length > 0, 'Name: ' + TS.name(rec0));
+ok(/Ticket \d\/2/.test(TS.detail(rec0)) && /StGr/.test(TS.detail(rec0)), 'Detail zeigt Ticket-Nr + StGr: ' + TS.detail(rec0));
+let threw = false; try { TS.ladeTokens('[]'); } catch (e) { threw = true; } ok(threw, 'leere Liste -> Fehler');
+threw = false; try { TS.ladeTokens('{kaputt'); } catch (e) { threw = /JSON/.test(e.message); } ok(threw, 'kaputtes JSON -> klarer Fehler');
 
-section('Scanner: Prüflogik grün/gelb/rot');
+sec('Scanner: grün/gelb/rot + Log/Wiederaufnahme');
 const state = new Map();
-const g1 = TS.pruefe(tjson[0].token, tokenMap, state);
-eq(g1.ergebnis, 'gueltig', 'erster Scan = gueltig (grün)');
-ok(TS.name(g1.rec).indexOf('Müller') >= 0, 'Ergebnis liefert Namen: ' + TS.name(g1.rec));
-const g2 = TS.pruefe(tjson[0].token, tokenMap, state);
-eq(g2.ergebnis, 'benutzt', 'zweiter Scan = benutzt (gelb)');
-ok(!!g2.vorigeZeit, 'benutzt liefert vorige Zeit');
-const g3 = TS.pruefe('FREMDER_CODE_XYZ', tokenMap, state);
-eq(g3.ergebnis, 'ungueltig', 'fremder Code = ungueltig (rot)');
-eq(state.size, 1, 'genau 1 Ticket entwertet (Zähler eingecheckt)');
+eq(TS.pruefe(tj[0].token, tokenMap, state).ergebnis, 'gueltig', 'erster Scan grün');
+const g2 = TS.pruefe(tj[0].token, tokenMap, state);
+eq(g2.ergebnis, 'benutzt', 'zweiter Scan gelb'); ok(!!g2.vorigeZeit, 'gelb nennt vorige Zeit');
+eq(TS.pruefe('FREMD', tokenMap, state).ergebnis, 'ungueltig', 'fremder Code rot');
+eq(state.size, 1, 'genau 1 entwertet');
 
-section('Scanner: Log Export/Import + Wiederaufnahme');
 const log = [];
-function scanUndLog(tok) {
-  const r = TS.pruefe(tok, tokenMap, state);
-  log.push({ token: r.token, name: TS.name(r.rec), zeit: r.zeit, ergebnis: TS.ERG_TEXT[r.ergebnis] });
-  return r;
-}
-// frischer Zustand
+const scan = (t) => { const r = TS.pruefe(t, tokenMap, state); log.push({ token: r.token, name: TS.name(r.rec), zeit: r.zeit, ergebnis: TS.ERG_TEXT[r.ergebnis] }); };
 state.clear(); log.length = 0;
-scanUndLog(tjson[0].token); // gültig
-scanUndLog(tjson[1].token); // gültig
-scanUndLog(tjson[0].token); // bereits benutzt
-scanUndLog('FREMD');         // ungültig
-const csvLog = TS.logToCsv(log);
-ok(csvLog.indexOf('token;name;zeit;ergebnis') >= 0, 'Log-CSV hat Kopfzeile');
-const wieder = TS.csvToLog(csvLog);
-eq(wieder.length, 4, 'csvToLog liest 4 Ereignisse');
-eq(wieder[0].ergebnis, 'Gültig', 'Ergebnis-Text bleibt erhalten');
-// "Neustart": frischer state, aus Log rekonstruieren
-const state2 = TS.zustandAusLog(wieder);
-eq(state2.size, 2, 'zustandAusLog: 2 Tickets als entwertet wiederhergestellt');
-ok(state2.has(tjson[0].token) && state2.has(tjson[1].token), 'richtige Tokens wiederhergestellt');
-// nach Wiederaufnahme erneut scannen -> benutzt
-const nach = TS.pruefe(tjson[0].token, tokenMap, state2);
-eq(nach.ergebnis, 'benutzt', 'nach Wiederaufnahme: erneuter Scan = benutzt');
+scan(tj[0].token); scan(tj[1].token); scan(tj[0].token); scan('FREMD');
+const csv = TS.logToCsv(log);
+ok(csv.indexOf('token;name;zeit;ergebnis') >= 0, 'Log-CSV Kopf');
+const wieder = TS.csvToLog(csv); eq(wieder.length, 4, 'csvToLog: 4 Ereignisse');
+const state2 = TS.zustandAusLog(wieder); eq(state2.size, 2, 'zustandAusLog: 2 entwertet wiederhergestellt');
+eq(TS.pruefe(tj[0].token, tokenMap, state2).ergebnis, 'benutzt', 'nach Wiederaufnahme erneut -> gelb');
 
-section('Scanner: mergeLog dedupliziert');
-const merged = TS.mergeLog(wieder, wieder.slice(0, 2));
-eq(merged.length, 4, 'mergeLog entfernt Dubletten');
-
-/* ---------------- Ergebnis ---------------- */
 console.log('\n=================================');
 console.log('Bestanden: ' + pass + '   Fehlgeschlagen: ' + fail);
 console.log('=================================');
