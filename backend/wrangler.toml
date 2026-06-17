@@ -14,7 +14,8 @@ new_sqlite_classes = ["EventDO"]
 
 [vars]
 ALLOW_ORIGIN = "*"   # für Produktion auf die Scanner-Origin einschränken,
-                     # z. B. "https://toxicshepherd.github.io"
+                     # z. B. "https://einlass.pages.dev"
+JURISDICTION = "eu"  # Datenstandort EU (DSGVO); leer lassen = global
 
 # Gemeinsamer Schlüssel NICHT hier, sondern als Secret setzen:
 #   npx wrangler secret put SCAN_KEY

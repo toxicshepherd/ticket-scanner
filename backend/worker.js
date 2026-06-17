@@ -46,8 +46,10 @@ export default {
     if (request.method === 'POST') { try { body = await request.json(); } catch (e) { body = {}; } }
     const event = (url.searchParams.get('event') || body.event || 'default').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 64) || 'default';
 
-    const id = env.EVENT.idFromName(event);
-    const stub = env.EVENT.get(id);
+    // Datenstandort an die EU binden (DSGVO) — per Variable JURISDICTION="eu"
+    var ns = env.JURISDICTION ? env.EVENT.jurisdiction(env.JURISDICTION) : env.EVENT;
+    const id = ns.idFromName(event);
+    const stub = ns.get(id);
     // Anfrage an das Durable Object weiterreichen (Pfad + Query + Body)
     const inner = new URL(request.url);
     return stub.fetch(new Request(inner.toString(), {

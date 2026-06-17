@@ -6,9 +6,14 @@ bleiben lokal** – auf die (gehostete) Scanner-Seite gelangen nur anonyme Token
 | Teil | Wo | Zweck |
 |---|---|---|
 | **`ticket-generator.html`** | lokal (Doppelklick) | Excel/CSV einlesen → Karten-PDFs (Vorder-/Rückseite) + **`tokens.json`** (nur Token + Ticket-Nr.) + **`zuordnung.csv`** (Token ↔ Klarname, bleibt lokal). |
-| **`einlass-scanner.html`** | gehostet über **HTTPS** (z. B. GitHub Pages) | scannt per **Kamera oder USB-Handscanner**, prüft gegen `tokens.json`, synchronisiert mehrere Geräte in Echtzeit (optional), exportiert das Ergebnis. |
+| **`einlass-scanner.html`** / `index.html` | gehostet über **HTTPS** (empfohlen: **Cloudflare Pages**, alternativ GitHub Pages) | scannt per **Kamera oder USB-Handscanner**, prüft gegen `tokens.json`, synchronisiert mehrere Geräte in Echtzeit (optional), exportiert das Ergebnis. |
 | **`auswertung.html`** | lokal (Doppelklick) | gleicht die (anonymen) Scan-Ergebnisse mit `zuordnung.csv` ab → Klarnamen-Ergebnis + **Doppelscan-/Vorfallbericht**. |
-| `backend/` | Cloudflare Worker (optional) | Echtzeit-Sync mehrerer Scan-Geräte; speichert **nur Token + Zeit + Gerätename**, keine Personendaten. |
+| `backend/` | **Cloudflare Worker** (optional, EU-gepinnt) | Echtzeit-Sync mehrerer Scan-Geräte; speichert **nur Token + Zeit + Gerätename**, keine Personendaten. |
+
+> **Empfehlung: alles bei Cloudflare (kostenlos).** Cloudflare **Pages** hostet den
+> Scanner (wie GitHub Pages, deployt direkt aus dem Repo) und der Cloudflare
+> **Worker** übernimmt den Live-Sync — ein Anbieter, kostenloser Plan, Daten per
+> `jurisdiction:"eu"` in der EU. Schritt-für-Schritt: [`backend/README.md`](backend/README.md).
 
 ## Datenschutz / Aufteilung
 
@@ -23,7 +28,7 @@ bleiben lokal** – auf die (gehostete) Scanner-Seite gelangen nur anonyme Token
 3. **Hochladen.** Nur **`tokens.json`** in das GitHub-Pages-Repo legen (in den Ordner neben `index.html`); der Scanner lädt sie automatisch. `zuordnung.csv` **lokal** sicher aufbewahren.
 4. **Einlass.** Scanner über HTTPS öffnen — die Pages-Startseite **ist** der Scanner: `https://toxicshepherd.github.io/ticket-scanner/` (Kamera/USB). Bei mehreren Geräten denselben Sync-Dienst + dieselbe Event-Kennung eintragen → live gemeinsamer Stand und gerätübergreifende Doppelerkennung.
 
-> **GitHub Pages:** Settings → Pages → Branch `main`, Ordner `/ (root)`. `index.html` ist der neue Scanner; `tokens.json` einfach mit ins Repo-Root legen/committen.
+> **Hosting:** Empfohlen **Cloudflare Pages** (Repo verbinden, kein Build, Ausgabe `/`) — siehe [`backend/README.md`](backend/README.md). Alternativ **GitHub Pages** (Settings → Pages → Branch `main`, Ordner `/ (root)`). In beiden Fällen ist `index.html` der Scanner; `tokens.json` ins Repo-Root legen.
 5. **Auswerten (lokal).** Nach dem Einlass „Ergebnis sichern" (CSV) und in `auswertung.html` zusammen mit `zuordnung.csv` laden → Klarnamen-Ergebnis, Doppelscan-Vorfälle, Nicht-Erschienene.
 
 ## ticket-generator.html (lokal)
