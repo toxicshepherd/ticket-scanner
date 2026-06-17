@@ -1,0 +1,24 @@
+# Cloudflare Workers "Static Assets": diese Pfade NICHT öffentlich ausliefern.
+# Deny-Liste in .gitignore-Syntax (robust, ohne Negation). Öffentlich bleiben
+# nur die Scanner-Dateien (index.html, einlass-scanner.html) und tokens.json.
+**/.git
+**/.DS_Store
+.wrangler
+node_modules
+.gitignore
+.assetsignore
+wrangler.toml
+wrangler.jsonc
+build.mjs
+*.md
+/src/
+/test/
+/backend/
+/apps-script/
+/outlook/
+/design/
+/vendor/
+/beispiel-teilnehmer.csv
+/ticket-generator.html
+/auswertung.html
+/legacy-google-scanner.html

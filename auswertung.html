@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Einlass-Auswertung (lokal) — Token ↔ Klarname</title>
+<style>
+  :root{ --akzent:#15528f; --rahmen:#d7dde3; --bg:#f4f6f8; --text:#1d2733; --ok:#1f8a4c; --warn:#e0a800; --fehler:#c0392b; }
+  *{box-sizing:border-box}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);line-height:1.45}
+  header{background:var(--akzent);color:#fff;padding:14px 20px}
+  header h1{margin:0;font-size:1.2rem} header p{margin:4px 0 0;opacity:.9;font-size:.85rem}
+  main{max-width:1100px;margin:0 auto;padding:18px}
+  section{background:#fff;border:1px solid var(--rahmen);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  h2{font-size:1.05rem;margin:0 0 10px}
+  label{font-size:.82rem;font-weight:600;color:#445;display:block;margin:6px 0 3px}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:9px 14px;background:var(--akzent);color:#fff;font-weight:600}
+  button:hover{background:#0f3f6f} button:disabled{background:#aab4bd;cursor:not-allowed}
+  button.sek{background:#e9eef3;color:var(--text);border:1px solid var(--rahmen)} button.sek:hover{background:#dde4ea}
+  .filerow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .karten{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:6px 0 4px}
+  .kpi{background:#eef2f6;border-radius:10px;padding:10px 12px} .kpi .n{font-size:1.6rem;font-weight:800} .kpi .l{font-size:.8rem;color:#556}
+  .kpi.warn{background:#fff7df} .kpi.ok{background:#e7f6ed} .kpi.fehler{background:#fdecea}
+  table{border-collapse:collapse;width:100%;font-size:.85rem;margin-top:8px}
+  th,td{border:1px solid var(--rahmen);padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:#eef2f6;position:sticky;top:0}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+  .tab{padding:7px 12px;border-radius:8px;background:#e9eef3;border:1px solid var(--rahmen);cursor:pointer;font-weight:600;font-size:.85rem}
+  .tab.aktiv{background:var(--akzent);color:#fff;border-color:var(--akzent)}
+  .tabinhalt{display:none;max-height:60vh;overflow:auto;border:1px solid var(--rahmen);border-radius:8px}
+  .tabinhalt.aktiv{display:block}
+  .status{padding:8px 12px;border-radius:7px;font-size:.9rem;margin-top:10px}
+  .status.ok{background:#e7f6ed;color:#155e34;border:1px solid #b6e0c4}
+  .status.fehler{background:#fdecea;color:#a02617;border:1px solid #f3c0b8}
+  .badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:.74rem;font-weight:700;color:#fff}
+  .badge.ein{background:var(--ok)} .badge.doppel{background:var(--warn);color:#3a2e00} .badge.fehlt{background:#8392a3} .badge.unbk{background:var(--fehler)}
+  .small{font-size:.8rem;color:#667} code{background:#eef2f6;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Einlass-Auswertung — Token ↔ Klarname</h1>
+  <p>Vollständig lokal/offline · gleicht die (PII-freien) Scan-Ergebnisse mit der lokalen Zuordnungstabelle ab · keine Daten verlassen den Rechner</p>
+</header>
+<main>
+  <section>
+    <h2>1. Dateien laden</h2>
+    <div class="filerow">
+      <div>
+        <label>Zuordnung (lokal): <code>zuordnung.csv</code></label>
+        <input type="file" id="fileZuordnung" accept=".csv,text/csv">
+      </div>
+      <div>
+        <label>Scan-Ergebnis(se) — Backend-Export oder Geräte-Logs (mehrere möglich)</label>
+        <input type="file" id="fileErgebnis" accept=".csv,text/csv" multiple>
+      </div>
+    </div>
+    <div id="ladeStatus"></div>
+  </section>
+
+  <section id="auswertungBox" style="display:none">
+    <h2>2. Ergebnis</h2>
+    <div class="karten" id="kpis"></div>
+    <div class="filerow" style="margin:8px 0">
+      <button id="btnExport">Klarnamen-Ergebnis als CSV exportieren</button>
+      <button class="sek" id="btnVorfaelle">Nur Vorfall-Bericht exportieren</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div id="tabinhalte"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var zuordnung = null;      // Map token -> {nachname,vorname,studiengruppe,studienort,einstellungsjahr,ticketNr,anzahl}
+  var ergebnisGeladen = false;
+  var ereignisse = [];       // {token, zeit, device, status:'ein'|'doppel'|'roh'}  (roh = aus Ergebnis, Status normalisiert)
+  var auswertung = null;
+
+  /* ---------- CSV-Parser (; oder , ; Anführungszeichen) ---------- */
+  function parseCSV(text) {
+    text = String(text); if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var first = text.split(/\r\n|\n|\r/)[0] || '';
+    var delim = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+    var rows = [], row = [], f = '', q = false, i = 0, n = text.length;
+    while (i < n) { var c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i += 2; continue; } q = false; i++; continue; } f += c; i++; continue; }
+      if (c === '"') { q = true; i++; continue; }
+      if (c === delim) { row.push(f); f = ''; i++; continue; }
+      if (c === '\r') { if (text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; i++; continue; }
+      if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; i++; continue; }
+      f += c; i++;
+    }
+    if (f.length || row.length) { row.push(f); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return String(x).trim() !== ''; }); });
+  }
+  function spalten(header) { var m = {}; header.forEach(function (h, i) { m[String(h).trim().toLowerCase()] = i; }); return m; }
+  function meldung(t, typ) { var e = $('ladeStatus'); e.innerHTML = ''; if (!t) return; var d = document.createElement('div'); d.className = 'status ' + (typ || 'ok'); d.textContent = t; e.appendChild(d); }
+
+  /* ---------- Laden ---------- */
+  $('fileZuordnung').addEventListener('change', function (e) { var f = e.target.files[0]; if (!f) return; lese(f, function (txt) { ladeZuordnung(txt); }); });
+  $('fileErgebnis').addEventListener('change', function (e) {
+    var fs = Array.prototype.slice.call(e.target.files); if (!fs.length) return;
+    ereignisse = []; var rest = fs.length;
+    fs.forEach(function (f) { lese(f, function (txt) { ladeErgebnis(txt, f.name); if (--rest === 0) { ergebnisGeladen = true; berechne(); } }); });
+  });
+  function lese(file, cb) { var r = new FileReader(); r.onerror = function () { meldung('Datei konnte nicht gelesen werden.', 'fehler'); }; r.onload = function () { try { cb(String(r.result)); } catch (err) { meldung('Fehler: ' + err.message, 'fehler'); } }; r.readAsText(file, 'UTF-8'); }
+
+  function ladeZuordnung(txt) {
+    var rows = parseCSV(txt); if (!rows.length) throw new Error('zuordnung.csv ist leer.');
+    var m = spalten(rows[0]);
+    if (m['token'] == null) throw new Error('In zuordnung.csv fehlt die Spalte „token".');
+    zuordnung = new Map();
+    for (var i = 1; i < rows.length; i++) { var r = rows[i]; var tok = String(r[m['token']] || '').trim(); if (!tok) continue;
+      zuordnung.set(tok, {
+        nachname: val(r, m, 'nachname'), vorname: val(r, m, 'vorname'), studiengruppe: val(r, m, 'studiengruppe'),
+        studienort: val(r, m, 'studienort'), einstellungsjahr: val(r, m, 'einstellungsjahr'),
+        ticketNr: val(r, m, 'ticketnr'), anzahl: val(r, m, 'anzahl')
+      });
+    }
+    berechne();
+  }
+  function val(r, m, k) { return m[k] != null ? String(r[m[k]] || '').trim() : ''; }
+
+  // Akzeptiert Backend-Export (token;device;zeit;status) UND Geräte-Log (token;name;zeit;ergebnis)
+  function ladeErgebnis(txt, quelle) {
+    var rows = parseCSV(txt); if (!rows.length) return;
+    var m = spalten(rows[0]);
+    if (m['token'] == null) throw new Error('In „' + quelle + '" fehlt die Spalte „token".');
+    for (var i = 1; i < rows.length; i++) { var r = rows[i]; var tok = String(r[m['token']] || '').trim(); if (!tok) continue;
+      var device = val(r, m, 'device') || quelle;
+      var zeit = val(r, m, 'zeit');
+      var roh = (val(r, m, 'status') || val(r, m, 'ergebnis')).toLowerCase();
+      var status;
+      if (roh === 'first' || roh.indexOf('gült') === 0) status = 'ein';
+      else if (roh === 'duplicate' || roh.indexOf('bereits') === 0) status = 'doppel';
+      else status = 'ungueltig';
+      ereignisse.push({ token: tok, device: device, zeit: zeit, status: status });
+    }
+  }
+
+  /* ---------- Berechnung ---------- */
+  function berechne() {
+    if (!zuordnung || !ergebnisGeladen) return;
+    // pro Token gruppieren
+    var proToken = new Map();
+    ereignisse.forEach(function (e) { if (!proToken.has(e.token)) proToken.set(e.token, []); proToken.get(e.token).push(e); });
+
+    var eingecheckt = [], doppel = [], unbekannt = [];
+    proToken.forEach(function (evs, tok) {
+      evs.sort(function (a, b) { return (a.zeit || '') < (b.zeit || '') ? -1 : 1; });
+      var erfolg = evs.filter(function (e) { return e.status === 'ein'; });
+      var person = zuordnung.get(tok) || null;
+      var geraete = evs.map(function (e) { return e.device; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      var erste = (erfolg[0] || evs[0]).zeit;
+      if (!person) {
+        unbekannt.push({ token: tok, zeit: erste, geraete: geraete, anzahl: evs.length });
+      } else {
+        if (erfolg.length >= 1) eingecheckt.push({ token: tok, person: person, zeit: (erfolg[0] || {}).zeit, geraete: geraete });
+        // Vorfall: mehr als ein erfolgreicher Einlass ODER zusätzliche Doppel-Versuche
+        if (erfolg.length > 1 || (erfolg.length >= 1 && evs.length > 1)) {
+          doppel.push({ token: tok, person: person, ereignisse: evs, geraete: geraete, erfolge: erfolg.length });
+        }
+      }
+    });
+    // Nicht erschienen: in Zuordnung, aber kein erfolgreicher Einlass
+    var nicht = [];
+    zuordnung.forEach(function (person, tok) {
+      var evs = proToken.get(tok) || [];
+      if (!evs.some(function (e) { return e.status === 'ein'; })) nicht.push({ token: tok, person: person });
+    });
+
+    auswertung = { eingecheckt: eingecheckt, doppel: doppel, nicht: nicht, unbekannt: unbekannt };
+    render();
+  }
+
+  /* ---------- Anzeige ---------- */
+  function render() {
+    $('auswertungBox').style.display = '';
+    var a = auswertung;
+    $('kpis').innerHTML =
+      kpi('ok', a.eingecheckt.length, 'eingecheckt') +
+      kpi('warn', a.doppel.length, 'Doppelscan-Vorfälle') +
+      kpi('', a.nicht.length, 'nicht erschienen') +
+      kpi('fehler', a.unbekannt.length, 'unbekannte Codes') +
+      kpi('', zuordnung.size, 'Tickets gesamt');
+
+    var P = function (p) { return [p.vorname, p.nachname].filter(Boolean).join(' '); };
+    var tabs = [
+      ['Eingecheckt (' + a.eingecheckt.length + ')', tabelle(['Name', 'Studiengruppe', 'StO', 'Ticket', 'Zeit', 'Gerät(e)'],
+        a.eingecheckt.map(function (x) { return [P(x.person), x.person.studiengruppe, x.person.studienort, tnr(x.person), zt(x.zeit), x.geraete.join(', ')]; }))],
+      ['Doppelscan-Vorfälle (' + a.doppel.length + ')', a.doppel.length ? tabelleVorfall(a.doppel, P) : leer('Keine Doppelscans.')],
+      ['Nicht erschienen (' + a.nicht.length + ')', tabelle(['Name', 'Studiengruppe', 'StO', 'Ticket'],
+        a.nicht.map(function (x) { return [P(x.person), x.person.studiengruppe, x.person.studienort, tnr(x.person)]; }))],
+      ['Unbekannte Codes (' + a.unbekannt.length + ')', tabelle(['Token', 'Zeit', 'Gerät(e)', 'Scans'],
+        a.unbekannt.map(function (x) { return [x.token, zt(x.zeit), x.geraete.join(', '), x.anzahl]; }))]
+    ];
+    var tabsEl = $('tabs'), inhalteEl = $('tabinhalte'); tabsEl.innerHTML = ''; inhalteEl.innerHTML = '';
+    tabs.forEach(function (t, i) {
+      var b = document.createElement('div'); b.className = 'tab' + (i === 0 ? ' aktiv' : ''); b.textContent = t[0]; b.onclick = function () { wechsle(i); }; tabsEl.appendChild(b);
+      var d = document.createElement('div'); d.className = 'tabinhalt' + (i === 0 ? ' aktiv' : ''); d.innerHTML = t[1]; inhalteEl.appendChild(d);
+    });
+    meldung('Abgleich fertig: ' + a.eingecheckt.length + ' eingecheckt, ' + a.doppel.length + ' Vorfälle, ' + a.nicht.length + ' nicht erschienen, ' + a.unbekannt.length + ' unbekannt.', a.unbekannt.length || a.doppel.length ? 'fehler' : 'ok');
+  }
+  function wechsle(i) { var t = $('tabs').children, d = $('tabinhalte').children; for (var j = 0; j < t.length; j++) { t[j].className = 'tab' + (j === i ? ' aktiv' : ''); d[j].className = 'tabinhalt' + (j === i ? ' aktiv' : ''); } }
+  function kpi(cls, n, l) { return '<div class="kpi ' + cls + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]; }); }
+  function zt(iso) { if (!iso) return '—'; var d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString('de-DE'); }
+  function tnr(p) { return p.ticketNr && p.anzahl ? (p.ticketNr + '/' + p.anzahl) : ''; }
+  function tabelle(kopf, zeilen) {
+    var h = '<table><thead><tr>' + kopf.map(function (k) { return '<th>' + esc(k) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    if (!zeilen.length) return leer('Keine Einträge.');
+    zeilen.forEach(function (z) { h += '<tr>' + z.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; });
+    return h + '</tbody></table>';
+  }
+  function tabelleVorfall(doppel, P) {
+    var h = '<table><thead><tr><th>Name</th><th>Studiengruppe</th><th>Ticket</th><th>Erfolge</th><th>alle Scans (Zeit · Gerät · Ergebnis)</th></tr></thead><tbody>';
+    doppel.forEach(function (x) {
+      var evs = x.ereignisse.map(function (e) { return zt(e.zeit) + ' · ' + esc(e.device) + ' · ' + (e.status === 'ein' ? 'Einlass' : e.status === 'doppel' ? 'erneut' : 'ungültig'); }).join('<br>');
+      h += '<tr><td>' + esc(P(x.person)) + '</td><td>' + esc(x.person.studiengruppe) + '</td><td>' + esc(tnr(x.person)) + '</td><td>' + x.erfolge + '</td><td>' + evs + '</td></tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function leer(t) { return '<p class="small" style="padding:12px">' + esc(t) + '</p>'; }
+
+  /* ---------- Export ---------- */
+  function dl(text, name) { var b = new Blob([text], { type: 'text/csv;charset=utf-8' }); var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 4000); }
+  function csvZeile(arr) { return arr.map(function (v) { v = String(v == null ? '' : v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';'); }
+  $('btnExport').addEventListener('click', function () {
+    var a = auswertung; if (!a) return; var L = ['﻿' + csvZeile(['Nachname', 'Vorname', 'Studiengruppe', 'Studienort', 'Einstellungsjahr', 'Ticket', 'Status', 'Scans', 'ErsteZeit', 'Geraete'])];
+    var P = function (p) { return p; };
+    a.eingecheckt.forEach(function (x) { L.push(csvZeile([x.person.nachname, x.person.vorname, x.person.studiengruppe, x.person.studienort, x.person.einstellungsjahr, tnr(x.person), 'eingecheckt', '', zt(x.zeit), x.geraete.join(', ')])); });
+    a.nicht.forEach(function (x) { L.push(csvZeile([x.person.nachname, x.person.vorname, x.person.studiengruppe, x.person.studienort, x.person.einstellungsjahr, tnr(x.person), 'nicht erschienen', '', '', ''])); });
+    a.doppel.forEach(function (x) { L.push(csvZeile([x.person.nachname, x.person.vorname, x.person.studiengruppe, x.person.studienort, x.person.einstellungsjahr, tnr(x.person), 'DOPPELSCAN', x.ereignisse.length, zt((x.ereignisse[0] || {}).zeit), x.geraete.join(', ')])); });
+    dl(L.join('\r\n') + '\r\n', 'ergebnis_klarnamen.csv');
+  });
+  $('btnVorfaelle').addEventListener('click', function () {
+    var a = auswertung; if (!a) return; var L = ['﻿' + csvZeile(['Nachname', 'Vorname', 'Studiengruppe', 'Ticket', 'Token', 'Erfolge', 'AlleScans'])];
+    a.doppel.forEach(function (x) { L.push(csvZeile([x.person.nachname, x.person.vorname, x.person.studiengruppe, tnr(x.person), x.token, x.erfolge, x.ereignisse.map(function (e) { return zt(e.zeit) + ' ' + e.device + ' ' + e.status; }).join(' | ')])); });
+    a.unbekannt.forEach(function (x) { L.push(csvZeile(['', '', '', '', x.token, '0', 'unbekannter Code: ' + x.geraete.join(', ')])); });
+    dl(L.join('\r\n') + '\r\n', 'vorfall_bericht.csv');
+  });
+})();
+</script>
+</body>
+</html>
