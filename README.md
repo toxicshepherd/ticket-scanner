@@ -49,21 +49,21 @@ bleiben lokal** – auf die (gehostete) Scanner-Seite gelangen nur anonyme Token
 
 > **Warum HTTPS?** Kamera (`getUserMedia`) und mehrere andere Browser-Funktionen sind nur in einem „sicheren Kontext" (HTTPS oder `http://localhost`) verfügbar – per Doppelklick (`file://`) gesperrt. Deshalb wird der Scanner gehostet; der USB-Handscanner funktioniert in jedem Fall.
 
-## Mehrgeräte-Sync einrichten (`backend/`, Cloudflare Worker)
+## Mehrgeräte-Sync einrichten (`backend/`, Cloudflare)
 
-Optionaler kleiner Dienst für Echtzeit über mehrere Geräte/Netze. Speichert nur
-Tokens + Zeitstempel (keine Personendaten).
+Optional, für Echtzeit über mehrere Geräte. Speichert nur Tokens + Zeit + Gerät
+(keine Personendaten). Zwei Wege — **vollständige Anleitung:**
+[`backend/README.md`](backend/README.md):
 
-```
-cd backend
-npx wrangler login
-npx wrangler secret put SCAN_KEY      # gemeinsamen Schlüssel setzen
-npx wrangler deploy                    # liefert die Worker-URL
-```
+- **Ohne Installation, nur im Browser** (für gesperrte Rechner): Worker im
+  Cloudflare-**Dashboard** anlegen, Code aus `backend/worker-kv.js` einfügen,
+  KV-Namespace binden, `SCAN_KEY` als Secret setzen.
+- **Mit EU-Datenstandort** (Durable Object, `jurisdiction:"eu"`): `backend/worker.js`
+  per `npx wrangler deploy` auf einem Rechner mit Node.
 
-Die Worker-URL + Event-Kennung + Schlüssel im Scanner unter „Einstellungen"
-eintragen (oder als `?api=…&event=…&key=…`-Link verteilen). `backend/mock-server.mjs`
-ist ein lokaler Test-Server mit demselben Protokoll (`node backend/mock-server.mjs`).
+Danach Worker-URL/Event/Schlüssel im Scanner unter „Einstellungen" eintragen oder als
+`?api=…&event=…&key=…`-Link verteilen. Lokal testen ohne Cloudflare:
+`node backend/mock-server.mjs`.
 
 ## auswertung.html (lokal, für Vorfälle & Abschluss)
 
