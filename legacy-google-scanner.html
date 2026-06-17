@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ticket-Check-in</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: sans-serif; margin: 0; background: #fafafa;
+        height: 100vh; display: flex; flex-direction: column;
+      }
+      header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 8px 16px; background: #1f6cb4; color: #fff;
+      }
+      header h1 { font-size: 1.1em; margin: 0; flex: 1; }
+      header button {
+        background: none; border: 1px solid rgba(255,255,255,.5); color: #fff;
+        border-radius: 6px; padding: 4px 10px; font-size: .85em;
+      }
+
+      main {
+        flex: 1; min-height: 0;
+        display: grid; grid-template-columns: 3fr 2fr; gap: 12px;
+        padding: 12px;
+      }
+      /* Hochformat / schmale Bildschirme: untereinander */
+      @media (max-aspect-ratio: 1/1), (max-width: 760px) {
+        body { height: auto; }
+        main { grid-template-columns: 1fr; }
+      }
+
+      #left { min-height: 0; display: flex; }
+      #reader {
+        flex: 1; background: #000; border-radius: 8px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+      }
+      #reader video { width: 100% !important; height: 100% !important;
+                      object-fit: cover; }
+
+      #right { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+
+      #result {
+        padding: 14px; border-radius: 8px; min-height: 120px;
+        background: #eee; text-align: center;
+      }
+      #result .big  { font-size: 1.4em; font-weight: bold; }
+      #result .name { font-size: 1.25em; margin-top: 6px; }
+      #result .sub  { font-size: .95em; margin-top: 4px; opacity: .85; }
+      .ok        { background: #b7e1a1 !important; }
+      .duplicate { background: #ffd966 !important; }
+      .invalid   { background: #ea9999 !important; }
+
+      #again {
+        font-size: 1.05em; padding: 10px; border: none; border-radius: 8px;
+        background: #4285f4; color: #fff; width: 100%;
+      }
+
+      /* Statistiken */
+      #stats { background: #fff; border-radius: 8px; padding: 10px 14px; }
+      #progressOuter {
+        background: #e4e4e4; border-radius: 6px; height: 18px;
+        overflow: hidden; margin-top: 6px;
+      }
+      #progressInner {
+        background: #34a853; height: 100%; width: 0%;
+        transition: width .4s;
+      }
+      #progressText { font-size: .9em; color: #444; }
+      #counters {
+        display: flex; gap: 14px; margin-top: 8px; font-size: .9em; color: #444;
+      }
+      #counters b { font-size: 1.1em; }
+
+      /* Verlauf */
+      #historyBox {
+        flex: 1; min-height: 0; background: #fff; border-radius: 8px;
+        padding: 10px 14px; display: flex; flex-direction: column;
+      }
+      #historyBox h2 { margin: 0 0 6px; font-size: .95em; color: #666; }
+      #history {
+        flex: 1; overflow-y: auto; margin: 0; padding: 0; list-style: none;
+      }
+      #history li {
+        padding: 6px 8px; margin-bottom: 5px; border-radius: 6px;
+        font-size: .92em; border-left: 6px solid #ccc;
+        background: #f4f4f4; display: flex; gap: 8px; align-items: baseline;
+      }
+      #history li .t { color: #777; font-size: .85em; white-space: nowrap; }
+      #history li.ok        { border-left-color: #5fa845; }
+      #history li.duplicate { border-left-color: #e0a800; }
+      #history li.invalid   { border-left-color: #cc4125; }
+
+      #setup { padding: 24px; text-align: center; }
+      #setup input { width: 90%; max-width: 520px; font-size: 1em; padding: 8px; }
+      #setup button {
+        font-size: 1em; padding: 10px 22px; margin: 12px;
+        background: #4285f4; color: #fff; border: none; border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🎫 Ticket-Check-in</h1>
+      <button onclick="showSetup()">⚙ API-URL</button>
+    </header>
+
+    <!-- Einmalige Einrichtung: Apps-Script-Web-App-URL hinterlegen -->
+    <div id="setup" style="display:none">
+      <p>Apps-Script-Web-App-URL (endet auf /exec):</p>
+      <input id="apiInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+      <br /><button onclick="saveApi()">Speichern</button>
+    </div>
+
+    <main>
+      <section id="left"><div id="reader"></div></section>
+      <section id="right">
+        <div id="result">Kamera startet…</div>
+        <button id="again" style="display:none" onclick="restart()">Weiter</button>
+
+        <div id="stats">
+          <div id="progressText">Eingecheckt: – / –</div>
+          <div id="progressOuter"><div id="progressInner"></div></div>
+          <div id="counters">
+            <span>✔ OK: <b id="cntOk">0</b></span>
+            <span>⚠ Doppelt: <b id="cntDup">0</b></span>
+            <span>✘ Ungültig: <b id="cntInv">0</b></span>
+          </div>
+        </div>
+
+        <div id="historyBox">
+          <h2>Verlauf (letzte Scans)</h2>
+          <ol id="history"></ol>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const resultEl = document.getElementById('result');
+      const againBtn = document.getElementById('again');
+      const historyEl = document.getElementById('history');
+      const cnt = { ok: 0, duplicate: 0, invalid: 0 };
+      const scanner = new Html5Qrcode('reader');
+
+      // API-URL aus ?api=...-Parameter oder localStorage; sonst Eingabemaske
+      const apiParam = new URLSearchParams(location.search).get('api');
+      if (apiParam) localStorage.setItem('apiUrl', apiParam); // dauerhaft merken
+      let API_URL = apiParam || localStorage.getItem('apiUrl') || '';
+
+      function saveApi() {
+        const v = document.getElementById('apiInput').value.trim();
+        if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) {
+          alert('Bitte die vollständige /exec-URL einfügen.');
+          return;
+        }
+        localStorage.setItem('apiUrl', v);
+        // Neu laden, damit der Scanner sauber mit der neuen URL startet
+        location.href = location.pathname;
+      }
+
+      // Eingabemaske (wieder) öffnen, vorausgefüllt mit der aktuellen URL
+      function showSetup() {
+        document.getElementById('apiInput').value = API_URL;
+        document.getElementById('setup').style.display = 'block';
+        document.getElementById('apiInput').focus();
+      }
+
+      function start() {
+        // Kein qrbox-Parameter: das gesamte Kamerabild wird ausgewertet
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10 },
+          onScan
+        ).then(() => resultEl.textContent = 'Bereit zum Scannen')
+         .catch(e => resultEl.textContent = 'Kamerafehler: ' + e);
+      }
+
+      // Denselben Code kurz ignorieren, damit nach dem automatischen
+      // Weiterschalten nicht sofort eine Duplikat-Warnung erscheint,
+      // solange das Ticket noch vor der Kamera ist
+      let lastCode = '', lastTime = 0;
+
+      function onScan(code) {
+        const now = Date.now();
+        if (code === lastCode && now - lastTime < 8000) {
+          lastTime = now;
+          return;
+        }
+        lastCode = code;
+        lastTime = now;
+
+        scanner.pause();
+        resultEl.className = '';
+        resultEl.textContent = 'Prüfe…';
+        // Content-Type text/plain vermeidet CORS-Preflight, den Apps Script
+        // nicht beantwortet; redirect:'follow' folgt der /exec-Weiterleitung.
+        fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: code,
+          redirect: 'follow'
+        })
+          .then(r => r.json())
+          .then(show)
+          .catch(e => show({ status: 'error', message: e.message }));
+      }
+
+      function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+      }
+
+      function nowStr() {
+        return new Date().toLocaleTimeString('de-DE',
+          { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
+      function addHistory(cls, html) {
+        const li = document.createElement('li');
+        li.className = cls;
+        li.innerHTML = '<span class="t">' + nowStr() + '</span><span>' + html + '</span>';
+        historyEl.prepend(li);
+        while (historyEl.children.length > 50) historyEl.lastChild.remove();
+      }
+
+      function updateStats(res) {
+        if (res.sumTotal != null) {
+          document.getElementById('progressText').textContent =
+            'Eingecheckt: ' + res.sumChecked + ' von ' + res.sumTotal + ' Tickets';
+          document.getElementById('progressInner').style.width =
+            Math.round(100 * res.sumChecked / Math.max(1, res.sumTotal)) + '%';
+        }
+        document.getElementById('cntOk').textContent = cnt.ok;
+        document.getElementById('cntDup').textContent = cnt.duplicate;
+        document.getElementById('cntInv').textContent = cnt.invalid;
+      }
+
+      function show(res) {
+        if (res.status === 'ok') {
+          cnt.ok++;
+          resultEl.className = 'ok';
+          resultEl.innerHTML =
+            '<div class="big">✔ Eingecheckt (Ticket ' + esc(res.ticket) + ')</div>' +
+            '<div class="name">' + esc(res.person) + '</div>' +
+            (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
+            '<div class="sub">' + esc(res.time) + ' Uhr</div>';
+          addHistory('ok', '✔ ' + esc(res.person) + ' · Ticket ' + esc(res.ticket));
+        } else if (res.status === 'duplicate') {
+          cnt.duplicate++;
+          resultEl.className = 'duplicate';
+          resultEl.innerHTML =
+            '<div class="big">⚠ BEREITS EINGECHECKT</div>' +
+            '<div class="name">' + esc(res.person) + '</div>' +
+            (res.info ? '<div class="sub">' + esc(res.info) + '</div>' : '') +
+            '<div class="sub">Ticket ' + esc(res.ticket) +
+              ' · eingecheckt am ' + esc(res.time) + ' Uhr</div>';
+          addHistory('duplicate', '⚠ ' + esc(res.person) +
+            ' · Ticket ' + esc(res.ticket) + ' · war schon ' + esc(res.time));
+        } else if (res.status === 'invalid') {
+          cnt.invalid++;
+          resultEl.className = 'invalid';
+          resultEl.innerHTML = '<div class="big">✘ Ungültiger Code</div>';
+          addHistory('invalid', '✘ Ungültiger Code');
+        } else {
+          resultEl.className = 'invalid';
+          resultEl.innerHTML = '<div class="big">Verbindungsfehler</div>' +
+            '<div class="sub">' + esc(res.message || 'unbekannt') + '</div>';
+        }
+        updateStats(res);
+        if (navigator.vibrate) navigator.vibrate(res.status === 'ok' ? 100 : [80, 60, 80]);
+
+        // Nach 3 Sekunden automatisch weiter; Button erlaubt Sofort-Weiter
+        againBtn.style.display = 'block';
+        let countdown = 3;
+        againBtn.textContent = 'Weiter (' + countdown + ')';
+        resumeTimer = setInterval(() => {
+          countdown--;
+          if (countdown <= 0) restart();
+          else againBtn.textContent = 'Weiter (' + countdown + ')';
+        }, 1000);
+      }
+
+      let resumeTimer = null;
+      function restart() {
+        clearInterval(resumeTimer);
+        againBtn.style.display = 'none';
+        // Letztes Ergebnis bewusst stehen lassen — es bleibt groß sichtbar,
+        // bis der nächste Scan es ersetzt
+        scanner.resume();
+      }
+
+      if (API_URL) {
+        start();
+      } else {
+        showSetup();
+      }
+    </script>
+  </body>
+</html>

@@ -87,4 +87,6 @@ function baue(template, ziel) {
 
 baue('src/ticket-generator.template.html', 'ticket-generator.html');
 baue('src/einlass-scanner.template.html', 'einlass-scanner.html');
-console.log('Fertig. Beide Dateien sind eigenständig und ohne Netzwerk lauffähig.');
+// Für GitHub Pages: der Scanner ist zugleich die Startseite (index.html)
+baue('src/einlass-scanner.template.html', 'index.html');
+console.log('Fertig. Generator offline; Scanner zusätzlich als index.html (GitHub Pages).');

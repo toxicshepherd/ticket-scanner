@@ -20,8 +20,10 @@ bleiben lokal** – auf die (gehostete) Scanner-Seite gelangen nur anonyme Token
 
 1. **Generieren (lokal).** `ticket-generator.html` öffnen → Anlass-Vorlage wählen, Felder prüfen → Excel/CSV laden → „Karten erzeugen". Ergebnis-ZIP enthält die PDFs, `tokens.json` und `zuordnung.csv`.
 2. **Versenden.** PDFs aus der ZIP per Outlook-Makro (`outlook/SendTickets.bas`) verschicken (Dateiname `Nachname, Vorname - Ticket 1von2.pdf`).
-3. **Hochladen.** Nur **`tokens.json`** auf die Scanner-Seite legen (z. B. ins GitHub-Pages-Repo). `zuordnung.csv` **lokal** sicher aufbewahren.
-4. **Einlass.** Scanner-Seite über HTTPS öffnen (Kamera/USB). Bei mehreren Geräten denselben Sync-Dienst + dieselbe Event-Kennung eintragen → live gemeinsamer Stand und gerätübergreifende Doppelerkennung.
+3. **Hochladen.** Nur **`tokens.json`** in das GitHub-Pages-Repo legen (in den Ordner neben `index.html`); der Scanner lädt sie automatisch. `zuordnung.csv` **lokal** sicher aufbewahren.
+4. **Einlass.** Scanner über HTTPS öffnen — die Pages-Startseite **ist** der Scanner: `https://toxicshepherd.github.io/ticket-scanner/` (Kamera/USB). Bei mehreren Geräten denselben Sync-Dienst + dieselbe Event-Kennung eintragen → live gemeinsamer Stand und gerätübergreifende Doppelerkennung.
+
+> **GitHub Pages:** Settings → Pages → Branch `main`, Ordner `/ (root)`. `index.html` ist der neue Scanner; `tokens.json` einfach mit ins Repo-Root legen/committen.
 5. **Auswerten (lokal).** Nach dem Einlass „Ergebnis sichern" (CSV) und in `auswertung.html` zusammen mit `zuordnung.csv` laden → Klarnamen-Ergebnis, Doppelscan-Vorfälle, Nicht-Erschienene.
 
 ## ticket-generator.html (lokal)
@@ -117,13 +119,15 @@ Check-in-System für Veranstaltungen: Teilnehmer werden per XLSX-Liste in ein
 Google Sheet importiert, bekommen pro Person eine einstellbare Anzahl QR-Code-Tickets, und am
 Einlass werden die Codes mit der Handykamera über diese Scanner-Seite gescannt.
 
-**Scanner (GitHub Pages):** https://toxicshepherd.github.io/ticket-scanner/
+> Hinweis: Die GitHub-Pages-Startseite (`index.html`) ist jetzt der **neue
+> Scanner** des Offline-Systems. Der alte Apps-Script-Scanner wurde nach
+> `legacy-google-scanner.html` archiviert.
 
 ## Aufbau
 
 | Teil | Ort |
 |---|---|
-| `index.html` | Scanner-Seite, gehostet über GitHub Pages |
+| `legacy-google-scanner.html` | alte Scanner-Seite (früher `index.html`), Apps-Script-Anbindung |
 | `apps-script/Code.gs` | Apps Script (an das Google Sheet gebunden): XLSX-Import, Ticket-Verwaltung, Check-in-Endpunkt |
 | `apps-script/Upload.html` | Dialog zum Hochladen mehrerer Teilnehmerlisten (XLSX) |
 | `apps-script/Scanner.html` | Fallback-Scanner direkt in der Web-App (nur Foto-Modus, da Apps Script die Live-Kamera blockiert) |
