@@ -3018,13 +3018,10 @@ window.__ASSETS={"front":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gH
   }
 
   /* ---------- Ausgabedateien ----------------------------------------- */
+  // ÖFFENTLICH (Upload zur Scanner-Seite): NUR Token + Ticket-Nr., keine PII.
   function tokensJson(records) {
     return records.map(function (r) {
-      return {
-        token: r.token, anrede: r.anrede, vorname: r.vorname, nachname: r.nachname,
-        studienort: r.studienort, einstellungsjahr: r.einstellungsjahr,
-        studiengruppe: r.studiengruppe, ticketNr: r.ticketNr, ticketAnzahl: r.ticketAnzahl
-      };
+      return { token: r.token, ticketNr: r.ticketNr, ticketAnzahl: r.ticketAnzahl };
     });
   }
   function csvFeld(v, d) {
@@ -3032,12 +3029,12 @@ window.__ASSETS={"front":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gH
     return (v.indexOf('"') >= 0 || v.indexOf('\r') >= 0 || v.indexOf('\n') >= 0 || v.indexOf(d) >= 0)
       ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
-  // Ohne E-Mail in der Liste: Versand erfolgt namensbasiert (Outlook-Makro
-  // löst "Vorname Nachname" über das Adressbuch auf).
-  function manifestCsv(records) {
-    var d = ';', lines = ['Nachname' + d + 'Vorname' + d + 'TicketNr' + d + 'Anzahl' + d + 'Dateiname'];
+  // LOKAL (bleibt beim Organisator, NICHT hochladen): Token -> Klarname.
+  // Dient dem späteren Abgleich (auswertung.html) und als Outlook-Referenz.
+  function zuordnungCsv(records) {
+    var d = ';', lines = ['token' + d + 'Nachname' + d + 'Vorname' + d + 'Studiengruppe' + d + 'Studienort' + d + 'Einstellungsjahr' + d + 'TicketNr' + d + 'Anzahl' + d + 'Dateiname'];
     records.forEach(function (r) {
-      lines.push([csvFeld(r.nachname, d), csvFeld(r.vorname, d), r.ticketNr, r.ticketAnzahl, csvFeld(r.dateiname, d)].join(d));
+      lines.push([r.token, csvFeld(r.nachname, d), csvFeld(r.vorname, d), csvFeld(r.studiengruppe, d), csvFeld(r.studienort, d), csvFeld(r.einstellungsjahr, d), r.ticketNr, r.ticketAnzahl, csvFeld(r.dateiname, d)].join(d));
     });
     return '﻿' + lines.join('\r\n') + '\r\n';
   }
@@ -3172,7 +3169,7 @@ window.__ASSETS={"front":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gH
 
     return p.then(function () {
       zip.file('tokens.json', JSON.stringify(tokensJson(meta), null, 2));
-      zip.file('versand_manifest.csv', manifestCsv(meta));
+      zip.file('zuordnung.csv', zuordnungCsv(meta));
       return { zip: zip, records: meta };
     });
   }
@@ -3184,7 +3181,7 @@ window.__ASSETS={"front":"data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gH
   TG.autoMapping = autoMapping; TG.hatUeberschrift = hatUeberschrift;
   TG.datensaetzeAusRows = datensaetzeAusRows; TG.felderHolen = felderHolen;
   TG.sanitize = sanitize; TG.dateiname = dateiname;
-  TG.tokensJson = tokensJson; TG.manifestCsv = manifestCsv;
+  TG.tokensJson = tokensJson; TG.zuordnungCsv = zuordnungCsv;
   TG.zeichneQR = zeichneQR; TG.zeichneFront = zeichneFront; TG.zeichneBack = zeichneBack;
   TG.erzeugeTicketBytes = erzeugeTicketBytes; TG.baueAlles = baueAlles;
   TG.KARTE = KARTE;
