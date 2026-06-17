@@ -1,120 +1,102 @@
-# Eintrittskarten – Polizeiakademie Niedersachsen (Offline)
+# Eintrittskarten – Polizeiakademie Niedersachsen
 
-Zwei eigenständige HTML-Dateien für **Ausgabe** und **Einlasskontrolle** digitaler
-Eintrittskarten – **vollständig offline**, ohne Installation, ohne Internet, ohne
-externe Dienste. Beide Dateien werden einfach **per Doppelklick** im Browser
-geöffnet (auch auf einem abgeschotteten Windows-PC).
+Drei schlanke HTML-Werkzeuge + ein optionaler Sync-Dienst. **Personendaten
+bleiben lokal** – auf die (gehostete) Scanner-Seite gelangen nur anonyme Tokens.
 
-| Datei | Zweck |
-|---|---|
-| **`ticket-generator.html`** | Organisator: liest die Teilnehmer-Liste (Excel/CSV) und erzeugt personalisierte Karten-PDFs (Vorder- + Rückseite) im Polizeiakademie-Design, dazu `tokens.json` und ein Versand-Manifest – alles in **einer ZIP**. |
-| **`einlass-scanner.html`** | Einlass: prüft Codes gegen `tokens.json`, entwertet gültige Tickets, exportiert den Stand. |
-| `beispiel-teilnehmer.csv` | 10 Demozeilen im Spalten-Layout der Gesamtliste. |
+| Teil | Wo | Zweck |
+|---|---|---|
+| **`ticket-generator.html`** | lokal (Doppelklick) | Excel/CSV einlesen → Karten-PDFs (Vorder-/Rückseite) + **`tokens.json`** (nur Token + Ticket-Nr.) + **`zuordnung.csv`** (Token ↔ Klarname, bleibt lokal). |
+| **`einlass-scanner.html`** | gehostet über **HTTPS** (z. B. GitHub Pages) | scannt per **Kamera oder USB-Handscanner**, prüft gegen `tokens.json`, synchronisiert mehrere Geräte in Echtzeit (optional), exportiert das Ergebnis. |
+| **`auswertung.html`** | lokal (Doppelklick) | gleicht die (anonymen) Scan-Ergebnisse mit `zuordnung.csv` ab → Klarnamen-Ergebnis + **Doppelscan-/Vorfallbericht**. |
+| `backend/` | Cloudflare Worker (optional) | Echtzeit-Sync mehrerer Scan-Geräte; speichert **nur Token + Zeit + Gerätename**, keine Personendaten. |
 
-Alle Bibliotheken (QR-Erzeugung, PDF, ZIP, Excel-Import, Kamera-QR-Erkennung) und
-die Karten-Hintergründe (aus der PowerPoint-Vorlage) sind als Quellcode bzw. Bild
-**direkt eingebettet**. Es gibt **keine** `<script src>`-Tags, keinen `fetch`-/
-Netzwerkzugriff, keine CDN-Aufrufe. Im DevTools-Netzwerk-Tab erscheint keine
-externe Anfrage.
+## Datenschutz / Aufteilung
 
-## Bedienung in 5 Schritten
+- **`tokens.json`** (öffentlich, wird hochgeladen): nur `{token, ticketNr, ticketAnzahl}` – keine Namen.
+- **`zuordnung.csv`** (bleibt lokal beim Organisator): verknüpft Token ↔ Nachname/Vorname/Studiengruppe/…
+- Der **Sync-Dienst** sieht nur Tokens + Zeitstempel. Die Auflösung auf Klarnamen passiert **ausschließlich lokal** in `auswertung.html`.
 
-1. **Generator öffnen.** `ticket-generator.html` doppelklicken. Oben unter
-   **„Anlass & Texte"** die passende **Vorlage** wählen (Abschlussfeier,
-   Vereidigung, Dienstbesprechung, Ernennung …) und Datum/Jahrgang/Ort
-   bei Bedarf anpassen.
-2. **Liste laden.** Die **Excel-Datei** (`.xlsx`, z. B. die Gesamtliste) oder eine
-   CSV auswählen. Bei Excel das **Tabellenblatt** wählen (Standard: erstes Blatt,
-   „ausgeplant" wird übersprungen). Die Spalten *Anrede, Name, Vorname, StO,
-   Einstellungsjahr, neue StGr* werden automatisch erkannt – Zuordnung kurz prüfen.
-3. **Karten erzeugen.** Tickets pro Person setzen (Standard 1), dann
-   **„Karten erzeugen & ZIP herunterladen"**. Es entsteht je ein PDF
-   (Vorder-/Rückseite) pro Ticket, plus `tokens.json` und `versand_manifest.csv`.
-4. **Versenden.** Die PDFs aus der ZIP entpacken und per Outlook-Makro
-   (`outlook/SendTickets.bas`) verschicken – der Dateiname
-   `Nachname, Vorname - Ticket 1von2.pdf` wird vom Makro automatisch der richtigen
-   Person zugeordnet.
-5. **Einlass kontrollieren.** `einlass-scanner.html` am Eingangs-PC öffnen,
-   **`tokens.json`** laden und Codes mit dem **USB-2D-Scanner** (oder der Kamera,
-   falls erlaubt) scannen. Ampel: **grün = gültig**, **gelb = bereits benutzt**,
-   **rot = ungültig**. Regelmäßig **„Stand sichern"** klicken; nach einem Neustart
-   mit **„Stand laden"** fortsetzen.
+## Ablauf
 
-> **Datenhaltung:** Auf `file://` ist `localStorage` unzuverlässig. Der
-> Einlass-Stand bleibt nur **im Speicher** – daher regelmäßig als Datei sichern
-> (der Scanner erinnert automatisch alle 25 Scans).
+1. **Generieren (lokal).** `ticket-generator.html` öffnen → Anlass-Vorlage wählen, Felder prüfen → Excel/CSV laden → „Karten erzeugen". Ergebnis-ZIP enthält die PDFs, `tokens.json` und `zuordnung.csv`.
+2. **Versenden.** PDFs aus der ZIP per Outlook-Makro (`outlook/SendTickets.bas`) verschicken (Dateiname `Nachname, Vorname - Ticket 1von2.pdf`).
+3. **Hochladen.** Nur **`tokens.json`** auf die Scanner-Seite legen (z. B. ins GitHub-Pages-Repo). `zuordnung.csv` **lokal** sicher aufbewahren.
+4. **Einlass.** Scanner-Seite über HTTPS öffnen (Kamera/USB). Bei mehreren Geräten denselben Sync-Dienst + dieselbe Event-Kennung eintragen → live gemeinsamer Stand und gerätübergreifende Doppelerkennung.
+5. **Auswerten (lokal).** Nach dem Einlass „Ergebnis sichern" (CSV) und in `auswertung.html` zusammen mit `zuordnung.csv` laden → Klarnamen-Ergebnis, Doppelscan-Vorfälle, Nicht-Erschienene.
 
-## ticket-generator.html
+## ticket-generator.html (lokal)
 
-- **Eingabe:** Excel (`.xlsx`/`.xls`, SheetJS eingebettet) mit Blattauswahl, oder
-  CSV (Trennzeichen `;`/`,`/Tab automatisch). Spalten der Gesamtliste werden per
-  Synonym automatisch zugeordnet (`Name` → Nachname, `StO` → Studienort,
-  `neue StGr` → Studiengruppe); manuell korrigierbar.
-- **Token:** pro Ticket ein zufälliges, nicht erratbares Token (16 Byte aus
-  `crypto.getRandomValues` → base64url). QR-Inhalt = **nur das Token**.
-- **Karte (PDF):** A6-Querformat (212 × 100 mm), Vorder- + Rückseite im
-  Original-Design (Hintergrund aus der PPTX-Vorlage). Aufdruck: QR + Name +
-  „Ticket k/N" auf dem Abriss links, Anlass/Datum/Ort rechts.
-- **Mehrere Tickets pro Person:** durchnummeriert `1/N … N/N`, jedes mit eigenem
-  Token und eigener PDF-Datei.
-- **Ausgabe (eine ZIP):** je ein PDF pro Ticket, `tokens.json`
-  `{token, anrede, vorname, nachname, studienort, einstellungsjahr,
-  studiengruppe, ticketNr, ticketAnzahl}` (nur für den Scanner) und
-  `versand_manifest.csv` (`Nachname;Vorname;TicketNr;Anzahl;Dateiname`).
-- **Fortschrittsanzeige** auch bei vielen Hundert Karten.
+- **Eingabe:** Excel (`.xlsx`, SheetJS eingebettet, Blattauswahl, „ausgeplant" wird übersprungen) oder CSV. Spalten *Anrede / Name / Vorname / StO / Einstellungsjahr / neue StGr* werden automatisch erkannt.
+- **Anlass-Vorlagen** (Abschlussfeier, Vereidigung, Dienstbesprechung, Ernennung) füllen die Textfelder vor; alles editierbar.
+- **Mehrere Tickets pro Person** (`1/N … N/N`), jedes mit eigenem Token.
+- **Design:** Original-Karte (A6-Quer 212×100 mm, Vorder-/Rückseite) – Hintergrund aus der PowerPoint-Vorlage in voller Auflösung (~300 dpi). Option „Kompakte PDFs" für sehr große Mengen.
+- **QR:** enthält nur das Zufalls-Token (16 Byte → base64url).
 
-## einlass-scanner.html
+## einlass-scanner.html (über HTTPS hosten)
 
-- `tokens.json` laden. Zwei Eingabewege: **USB-2D-Scanner** (Tastatur, Enter prüft –
-  Standardweg) und **Kamera** (falls vom Browser erlaubt, sonst sauberer Fallback).
-- Prüflogik: gültig → **grün** + Name, Ticket-Nr., Studiengruppe/Studienort;
-  schon benutzt → **gelb** + letzte Einlasszeit; nicht in Liste → **rot**.
-- Zähler „Eingecheckt: X / Gesamt", Verlauf, Ton/Vibration. **Stand sichern/laden**
-  als CSV (`token;name;zeit;ergebnis`) zur Wiederaufnahme; Hinweis alle 25 Scans.
+- Lädt `tokens.json` automatisch von der Seite (oder manuell per Datei).
+- **Kamera** (jsQR, Rückkamera bevorzugt, Kamera-Auswahl) **und USB-Handscanner** (Tastatur, Enter) parallel.
+- Ampel grün/gelb/rot. Da die Liste anonym ist, zeigt der Scanner **keine Namen**, sondern Ticket-Nr. + Token (für die spätere Zuordnung).
+- **Echtzeit-Sync (optional):** unter „Einstellungen" Sync-URL, Event-Kennung, Schlüssel, Gerätename eintragen – oder per Link `…/einlass-scanner.html?api=<URL>&event=<EVENT>&key=<KEY>&device=<NAME>`. Alle Geräte mit derselben Event-Kennung teilen den Stand; ein an Gerät A entwertetes Ticket gilt sofort auch an Gerät B.
+- **„Ergebnis sichern":** mit Sync exportiert es das **gerätübergreifende** Gesamtergebnis, sonst den lokalen Stand (CSV). Ohne Sync zusätzlich „Stand laden" zur Wiederaufnahme.
+
+> **Warum HTTPS?** Kamera (`getUserMedia`) und mehrere andere Browser-Funktionen sind nur in einem „sicheren Kontext" (HTTPS oder `http://localhost`) verfügbar – per Doppelklick (`file://`) gesperrt. Deshalb wird der Scanner gehostet; der USB-Handscanner funktioniert in jedem Fall.
+
+## Mehrgeräte-Sync einrichten (`backend/`, Cloudflare Worker)
+
+Optionaler kleiner Dienst für Echtzeit über mehrere Geräte/Netze. Speichert nur
+Tokens + Zeitstempel (keine Personendaten).
+
+```
+cd backend
+npx wrangler login
+npx wrangler secret put SCAN_KEY      # gemeinsamen Schlüssel setzen
+npx wrangler deploy                    # liefert die Worker-URL
+```
+
+Die Worker-URL + Event-Kennung + Schlüssel im Scanner unter „Einstellungen"
+eintragen (oder als `?api=…&event=…&key=…`-Link verteilen). `backend/mock-server.mjs`
+ist ein lokaler Test-Server mit demselben Protokoll (`node backend/mock-server.mjs`).
+
+## auswertung.html (lokal, für Vorfälle & Abschluss)
+
+`zuordnung.csv` + eine oder mehrere Ergebnis-Exporte (Backend-Gesamtexport
+*oder* einzelne Geräte-Logs) laden. Ergebnis:
+
+- **Eingecheckt** – Klarnamen + Zeit + Gerät.
+- **Doppelscan-Vorfälle** – Tokens mit mehrfachem Einlass, auf Klarname aufgelöst, inkl. aller Scans (Zeit/Gerät) – für die Klärung „zu wem gehört das doppelt gescannte Ticket?".
+- **Nicht erschienen** und **unbekannte Codes**.
+- Export als `ergebnis_klarnamen.csv` bzw. `vorfall_bericht.csv`.
 
 ## Konfigurieren
 
-- **Anlass/Datum/Ort:** in der Oberfläche unter „Anlass & Texte" (Vorlagen +
-  freie Felder). Neue Vorlagen: im `<script>`-Block von
-  `src/ticket-generator.template.html` das Objekt `VORLAGEN` ergänzen.
-- **Spalten:** Standard ist das Gesamtlisten-Layout; weitere Überschriften über
-  die Synonym-Listen in `src/core-generator.js` (`SYNONYME`) ergänzbar.
-- **Karten-Design austauschen:** Hintergrundbilder in `src/assets/front.jpg`
-  (neutrale Vorderseite) und `src/assets/back.jpg` (Rückseite) ersetzen; die
-  Textpositionen stehen klar markiert in `zeichneFront()` in
-  `src/core-generator.js` (Maße in mm, direkt aus der `.pptx` übernommen). Danach
-  neu bauen (siehe unten).
+- **Anlass-Texte:** Oberfläche („Anlass & Texte") oder Objekt `VORLAGEN` in `src/ticket-generator.template.html`.
+- **Spalten:** Synonyme in `src/core-generator.js` (`SYNONYME`).
+- **Karten-Design:** `src/assets/front.jpg` / `back.jpg` ersetzen; Textpositionen (aus der `.pptx` übernommen) in `zeichneFront()` in `src/core-generator.js`.
 
 ## Sicherheit
 
-Fälschungsschutz über **zufällige 128-Bit-Token** + **Mitgliedschaftsprüfung** gegen
-`tokens.json`: nur enthaltene Tokens sind gültig, Tokens sind praktisch nicht
-erratbar, der QR enthält keine personenbezogenen Daten. `tokens.json` bleibt
-vertraulich (nur am Einlass-PC).
-
-## Hinweise
-
-- **Kamera per Doppelklick (`file://`)** wird von vielen Browsern gesperrt – der
-  **USB-2D-Scanner** ist der vorgesehene, immer funktionierende Weg.
-- Excel bitte als normale `.xlsx` speichern; CSV als **UTF-8**.
+Zufällige 128-Bit-Token + Mitgliedschaftsprüfung gegen `tokens.json`; Tokens sind
+praktisch nicht erratbar. Keine Personendaten im QR, in `tokens.json` oder im
+Sync-Dienst. Der Sync-Dienst ist über einen gemeinsamen Schlüssel (`X-Key`)
+geschützt.
 
 ## Neu bauen (für Entwickler)
 
-Die fertigen Dateien sind eingecheckt und sofort lauffähig. Nach Änderungen an
-`src/…`, `vendor/…` oder `src/assets/…`:
-
 ```
-node build.mjs           # bettet vendor + assets + src/core-*.js in die HTML ein
-node test/test-core.mjs  # Logik-Tests (ohne Zusatzpakete)
+node build.mjs           # bettet vendor + assets + src/core-*.js in generator/scanner ein
+node test/test-core.mjs  # Generator-/Scanner-Logik
+node test/test-sync.mjs  # Echtzeit-Sync gegen den lokalen Mock-Dienst
 ```
 
 | Ordner/Datei | Inhalt |
 |---|---|
-| `vendor/` | eingebettete Libs: qrcode-generator, jsPDF, JSZip, jsQR, xlsx (mini) |
+| `vendor/` | qrcode-generator, jsPDF, JSZip, jsQR, xlsx (mini) |
 | `src/assets/` | Karten-Hintergründe (front/back) aus der PowerPoint-Vorlage |
 | `src/core-generator.js`, `src/core-scanner.js` | reine Logik (Browser **und** Tests) |
 | `src/*.template.html` | Oberflächen mit `<!--INLINE:…-->`-Markern |
-| `build.mjs` | fügt alles zu zwei eigenständigen HTML zusammen, prüft auf externe Referenzen |
+| `auswertung.html` | eigenständig (keine externen Libs) |
+| `backend/` | Cloudflare Worker (`worker.js`, `wrangler.toml`) + lokaler Mock |
 
 Bibliotheken: qrcode-generator (MIT), jsPDF (MIT), JSZip (MIT/GPLv3), jsQR
 (Apache-2.0), SheetJS/xlsx (Apache-2.0). Karten-Design/Logo: Polizeiakademie

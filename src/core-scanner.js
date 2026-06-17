@@ -156,10 +156,40 @@
     return out;
   }
 
+  /* ---------- Echtzeit-Sync gegen den Cloud-Dienst (optional) --------
+   * cfg = { base, event, key, device }. Nutzt globales fetch.
+   * Der Dienst kennt NUR Check-ins (Token+Zeit), nicht die gültige Liste:
+   * Gültigkeit wird lokal gegen tokens.json geprüft, der Dienst liefert
+   * gerätübergreifend "first" (grün) vs. "duplicate" (gelb).
+   * ------------------------------------------------------------------ */
+  function syncHeaders(cfg) { var h = { 'Content-Type': 'application/json' }; if (cfg.key) h['X-Key'] = cfg.key; return h; }
+  function syncBase(cfg) { return String(cfg.base || '').replace(/\/+$/, ''); }
+  function syncScan(cfg, token) {
+    return fetch(syncBase(cfg) + '/scan', { method: 'POST', headers: syncHeaders(cfg), body: JSON.stringify({ event: cfg.event || 'default', token: token, device: cfg.device || 'Gerät' }) })
+      .then(function (r) { if (!r.ok) throw new Error('Sync-Fehler ' + r.status); return r.json(); });
+  }
+  function syncState(cfg, since) {
+    return fetch(syncBase(cfg) + '/state?event=' + encodeURIComponent(cfg.event || 'default') + '&since=' + (since || 0), { headers: syncHeaders(cfg) })
+      .then(function (r) { if (!r.ok) throw new Error('Sync-Fehler ' + r.status); return r.json(); });
+  }
+  function syncExport(cfg) {
+    return fetch(syncBase(cfg) + '/export?event=' + encodeURIComponent(cfg.event || 'default'), { headers: syncHeaders(cfg) })
+      .then(function (r) { if (!r.ok) throw new Error('Sync-Fehler ' + r.status); return r.text(); });
+  }
+  // Backend-Antwort -> einheitliches Ergebnis-Objekt wie pruefe()
+  function ergebnisAusSync(token, rec, antwort) {
+    if (antwort.status === 'first') return { ergebnis: 'gueltig', token: token, rec: rec, zeit: antwort.zeit };
+    return { ergebnis: 'benutzt', token: token, rec: rec, zeit: antwort.zeit, vorigeZeit: antwort.firstZeit, vorigesGeraet: antwort.firstDevice };
+  }
+
   /* ---------- Export ------------------------------------------------- */
   TS.ladeTokens = ladeTokens;
   TS.name = name;
   TS.detail = detail;
+  TS.syncScan = syncScan;
+  TS.syncState = syncState;
+  TS.syncExport = syncExport;
+  TS.ergebnisAusSync = ergebnisAusSync;
   TS.pruefe = pruefe;
   TS.logToCsv = logToCsv;
   TS.parseCsv = parseCsv;

@@ -1,0 +1,20 @@
+name = "einlass-sync"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Durable Object für die Echtzeit-Synchronisierung
+[[durable_objects.bindings]]
+name = "EVENT"
+class_name = "EventDO"
+
+# SQLite-basierte Durable Objects laufen auch im kostenlosen Cloudflare-Plan
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["EventDO"]
+
+[vars]
+ALLOW_ORIGIN = "*"   # für Produktion auf die Scanner-Origin einschränken,
+                     # z. B. "https://toxicshepherd.github.io"
+
+# Gemeinsamer Schlüssel NICHT hier, sondern als Secret setzen:
+#   npx wrangler secret put SCAN_KEY
