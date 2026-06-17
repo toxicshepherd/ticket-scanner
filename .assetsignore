@@ -1,0 +1,8 @@
+# Cloudflare Workers "Static Assets": NUR die Scanner-Dateien öffentlich ausliefern.
+# Alles andere bleibt privat — insbesondere .git, der Quellcode, die Design-
+# Dateien und vor allem die LOKALEN PII-Werkzeuge ticket-generator.html und
+# auswertung.html (die dürfen NIE öffentlich gehostet werden).
+/*
+!/index.html
+!/einlass-scanner.html
+!/tokens.json

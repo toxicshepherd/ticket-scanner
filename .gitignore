@@ -1,0 +1,4 @@
+# Wrangler / Cloudflare-Build-Artefakte
+.wrangler/
+wrangler.jsonc
+node_modules/

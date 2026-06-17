@@ -16,6 +16,13 @@ Zeit + Gerätename** – keine Personendaten.
 2. **Kein Build-Befehl**, Ausgabeverzeichnis `/`. Deploy → `https://<projekt>.pages.dev/` (HTTPS → Kamera geht).
 3. **`tokens.json`** (aus der Generator-ZIP, PII-frei) ins Repo legen — am einfachsten über die **GitHub-Weboberfläche** (Repo → *Add file → Upload files*). Der Scanner lädt sie automatisch.
 
+> **⚠ Wichtig bei `npx wrangler deploy` (Workers Static Assets):** Cloudflare lädt
+> sonst **das ganze Repo** öffentlich hoch – inklusive `.git/` und der **lokalen
+> PII-Werkzeuge** `ticket-generator.html` / `auswertung.html`. Die Datei
+> **`.assetsignore`** im Repo-Root verhindert das und gibt **nur** `index.html`,
+> `einlass-scanner.html` und `tokens.json` frei. Nach dem Deploy gegenprüfen:
+> `https://<host>/.git/config` muss **404** liefern.
+
 Damit läuft der Scanner schon — auf beliebig vielen Geräten **unabhängig**
 (Doppelscans werden am Ende in `auswertung.html` erkannt). Für **Live**-Sync über
 alle Geräte zusätzlich einen der folgenden Wege.
